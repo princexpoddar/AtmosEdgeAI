@@ -1,0 +1,27 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Python caching
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Datasets and Databases (large files)
+backend/geobreathe.db
+backend/data/
+
+# Frontend dependencies and builds
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.eslintcache
+
+# OS/IDE configs
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
