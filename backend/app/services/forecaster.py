@@ -1,55 +1,59 @@
 import os
-import pickle
-import numpy as np
-import pandas as pd
 import math
 import random
+import logging
+import pickle
 from datetime import datetime, timedelta
+import numpy as np
+import pandas as pd
 from sqlalchemy.orm import Session
-from backend.app.core.database import Ward, Reading, Forecast
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from sklearn.preprocessing import StandardScaler
 
-# PyTorch CNN-LSTM model implementation matching the spatiotemporal architecture in the project PDF
-class CNNLSTMForecaster(nn.Module):
+from backend.app.core.database import City, Ward, Reading, Forecast, Station, StationReading
+from backend.app.services.ml.config import config, MODELS_DIR, BASE_DIR
+from backend.app.services.ml.features import engineer_features, get_temporal_feature_names
+from backend.app.services.ml.preprocessing import (
+    split_chronologically, 
+    create_sequences_for_ward, 
+    MLDataPipeline, 
+    SpatiotemporalDataset,
+    SCALER_PATH
+)
+from backend.app.services.ml.model import GlobalCNNLSTMForecaster
+from backend.app.services.ml.engine import train_model, set_seed, CHECKPOINT_PATH
+from backend.app.services.ml.evaluation import evaluate_predictions, save_metrics
+from backend.app.services.ml.plotting import plot_learning_curves, plot_prediction_vs_actual, plot_residuals
+from backend.app.services.data_pipeline.station_manager import StationManager
+from backend.app.services.data_pipeline.preprocessor import FEATURE_CACHE_PATH
+
+logger = logging.getLogger(__name__)
+
+# Legacy class name maintained for compatibility
+class CNNLSTMForecaster(torch.nn.Module):
     def __init__(self, input_dim, seq_len=24, hidden_dim=64, num_layers=1, output_dim=2):
         super(CNNLSTMForecaster, self).__init__()
         self.seq_len = seq_len
         self.hidden_dim = hidden_dim
-        
-        # 1D Convolution over temporal dimension
-        self.conv1d = nn.Conv1d(
+        self.conv1d = torch.nn.Conv1d(
             in_channels=input_dim, 
             out_channels=hidden_dim, 
             kernel_size=3, 
             padding=1
         )
-        self.relu = nn.ReLU()
-        
-        # LSTM layer
-        self.lstm = nn.LSTM(
+        self.relu = torch.nn.ReLU()
+        self.lstm = torch.nn.LSTM(
             input_size=hidden_dim, 
             hidden_size=hidden_dim, 
             num_layers=num_layers, 
             batch_first=True
         )
-        
-        # Fully connected layer to predict PM2.5 and NO2 simultaneously
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.fc = torch.nn.Linear(hidden_dim, output_dim)
         
     def forward(self, x):
-        # Input shape: (batch_size, seq_len, input_dim)
-        # Permute for Conv1d: (batch_size, input_dim, seq_len)
         x = x.permute(0, 2, 1)
         conv_out = self.relu(self.conv1d(x))
-        
-        # Permute back for LSTM: (batch_size, seq_len, hidden_dim)
         conv_out = conv_out.permute(0, 2, 1)
-        
         lstm_out, _ = self.lstm(conv_out)
-        # Output of the last sequence step
         out = self.fc(lstm_out[:, -1, :])
         return out
 
@@ -72,288 +76,324 @@ def calculate_pm25_aqi(pm25: float) -> float:
 
 def create_dataset_sequences(df, features, target_cols, seq_len=24, lead=24):
     """
-    Constructs sliding window sequences for temporal training
+    Legacy sliding window sequence generator. Maintained for compatibility.
     """
     X, y = [], []
     num_rows = len(df)
-    
     for i in range(num_rows - seq_len - lead):
-        # Input sequence from i to i + seq_len - 1
         seq_x = df.iloc[i : i + seq_len][features].values
-        # Target at i + seq_len - 1 + lead
         target_idx = i + seq_len - 1 + lead
         seq_y = df.iloc[target_idx][target_cols].values
-        
         X.append(seq_x)
         y.append(seq_y)
-        
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
 
-def generate_forecasts_for_all(db: Session, retrain: bool = False):
+def _save_forecast(
+    db: Session, 
+    ward_id: int, 
+    timestamp: datetime, 
+    forecast_time: datetime, 
+    predicted_pm25: float, 
+    predicted_no2: float, 
+    predicted_aqi: float
+) -> None:
     """
-    Core spatiotemporal Deep Learning Forecasting Engine.
-    For each ward, extracts historical readings, precomputes upwind fire indicators,
-    fits a CNN-LSTM model in PyTorch, and outputs 24h, 48h, and 72h future predictions for PM2.5 & NO2.
+    Helper function to insert or update forecast entries in the database.
     """
-    wards = db.query(Ward).all()
+    exists = db.query(Forecast).filter(
+        Forecast.ward_id == ward_id,
+        Forecast.timestamp == timestamp,
+        Forecast.forecast_time == forecast_time
+    ).first()
+    
+    if exists:
+        exists.predicted_pm25 = predicted_pm25
+        exists.predicted_no2 = predicted_no2
+        exists.predicted_aqi = predicted_aqi
+    else:
+        fc = Forecast(
+            ward_id=ward_id,
+            timestamp=timestamp,
+            forecast_time=forecast_time,
+            predicted_pm25=predicted_pm25,
+            predicted_no2=predicted_no2,
+            predicted_aqi=predicted_aqi
+        )
+        db.add(fc)
+
+def generate_forecasts_for_all(db: Session, retrain: bool = False) -> None:
+    """
+    Unified Forecasting Engine.
+    - retrain=True: Loads station features from cache, trains the global spatiotemporal model, and saves weights.
+    - retrain=False: Loads the model once, executes fast prediction on active stations, and maps them to Wards via Inverse Distance Weighting (IDW).
+    """
     now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     
-    # Instantiate the singleton FIRMS processor
-    from backend.app.services.firms_processor import get_firms_processor
-    firms_proc = get_firms_processor()
-    
-    for ward in wards:
-        # 1. Fetch historical readings for training or fast inference
-        if not retrain:
-            # Query only the last 100 readings for fast inference
-            readings_query = db.query(Reading).filter(
-                Reading.ward_id == ward.id,
-                Reading.timestamp <= now
-            ).order_by(Reading.timestamp.desc()).limit(100)
-            readings_list = list(readings_query)
-            readings_list.reverse()
-        else:
-            # Query all historical readings for full retraining
-            readings_query = db.query(Reading).filter(
-                Reading.ward_id == ward.id,
-                Reading.timestamp <= now
-            ).order_by(Reading.timestamp.asc())
-            readings_list = list(readings_query)
+    # 1. Retrain Phase: Model updates entirely on station readings
+    if retrain:
+        print("   [ML Engine] Starting global model retraining using Station Feature Cache...")
+        if not os.path.exists(FEATURE_CACHE_PATH):
+            logger.error(f"Feature Cache not found at {FEATURE_CACHE_PATH}. Retraining aborted.")
+            print(f"   [ML Engine] ERROR: Feature Cache file not found. Ingest historical data first.")
+            return
             
-        # Fallback if insufficient data
-        if len(readings_list) < 48:
-            print(f"   [ML Engine] Insufficient data for ward {ward.name} (<48 rows). Using physics fallback.")
+        with open(FEATURE_CACHE_PATH, "rb") as f:
+            station_dfs = pickle.load(f)
+            
+        if not station_dfs:
+            logger.error("Feature Cache is empty. Retraining aborted.")
+            return
+            
+        stations = db.query(Station).filter(Station.id.in_(list(station_dfs.keys()))).all()
+        station_id_to_idx = {st.id: i for i, st in enumerate(stations)}
+        
+        # Load unique cities from DB
+        cities = list(set([st.city for st in stations]))
+        city_name_to_idx = {c: i for i, c in enumerate(cities)}
+        
+        train_dfs = {}
+        val_dfs = {}
+        test_dfs = {}
+        static_features_dict = {}
+        
+        for st in stations:
+            df = station_dfs[st.id]
+            # Split chronologically
+            train_df, val_df, test_df = split_chronologically(df)
+            
+            train_dfs[st.id] = train_df
+            val_dfs[st.id] = val_df
+            test_dfs[st.id] = test_df
+            
+            city_encoded = city_name_to_idx.get(st.city, 0)
+            static_features_dict[st.id] = {
+                "latitude": st.latitude,
+                "longitude": st.longitude,
+                "city_encoded": city_encoded
+            }
+            
+        # Fit data pipeline scalers
+        data_pipeline = MLDataPipeline()
+        data_pipeline.fit(train_dfs, static_features_dict)
+        data_pipeline.save(SCALER_PATH)
+        
+        train_seqs = []
+        val_seqs = []
+        test_seqs = []
+        
+        temporal_cols = get_temporal_feature_names()
+        
+        for st in stations:
+            city_encoded = city_name_to_idx.get(st.city, 0)
+            st_idx = station_id_to_idx[st.id]
+            
+            # Scale
+            t_scaled = data_pipeline.transform_df(train_dfs[st.id])
+            v_scaled = data_pipeline.transform_df(val_dfs[st.id])
+            te_scaled = data_pipeline.transform_df(test_dfs[st.id])
+            
+            scaled_static = data_pipeline.transform_static(st.latitude, st.longitude, city_encoded)
+            
+            # Generate target sequences
+            t_x, t_w, t_s, t_y = create_sequences_for_ward(t_scaled, st_idx, scaled_static[0], scaled_static[1], scaled_static[2], seq_len=config.seq_len)
+            v_x, v_w, v_s, v_y = create_sequences_for_ward(v_scaled, st_idx, scaled_static[0], scaled_static[1], scaled_static[2], seq_len=config.seq_len)
+            te_x, te_w, te_s, te_y = create_sequences_for_ward(te_scaled, st_idx, scaled_static[0], scaled_static[1], scaled_static[2], seq_len=config.seq_len)
+            
+            if len(t_x) > 0:
+                train_seqs.append((t_x, t_w, t_s, t_y))
+            if len(v_x) > 0:
+                val_seqs.append((v_x, v_w, v_s, v_y))
+            if len(te_x) > 0:
+                test_seqs.append((te_x, te_w, te_s, te_y))
+                
+        # Merge datasets
+        X_train_temp = np.concatenate([s[0] for s in train_seqs], axis=0)
+        X_train_ward = np.concatenate([s[1] for s in train_seqs], axis=0)
+        X_train_static = np.concatenate([s[2] for s in train_seqs], axis=0)
+        y_train = np.concatenate([s[3] for s in train_seqs], axis=0)
+        
+        X_val_temp = np.concatenate([s[0] for s in val_seqs], axis=0)
+        X_val_ward = np.concatenate([s[1] for s in val_seqs], axis=0)
+        X_val_static = np.concatenate([s[2] for s in val_seqs], axis=0)
+        y_val = np.concatenate([s[3] for s in val_seqs], axis=0)
+        
+        X_test_temp = np.concatenate([s[0] for s in test_seqs], axis=0)
+        X_test_ward = np.concatenate([s[1] for s in test_seqs], axis=0)
+        X_test_static = np.concatenate([s[2] for s in test_seqs], axis=0)
+        y_test = np.concatenate([s[3] for s in test_seqs], axis=0)
+        
+        # Build dataloaders
+        train_dataset = SpatiotemporalDataset(X_train_temp, X_train_ward, X_train_static, y_train)
+        val_dataset = SpatiotemporalDataset(X_val_temp, X_val_ward, X_val_static, y_val)
+        test_dataset = SpatiotemporalDataset(X_test_temp, X_test_ward, X_test_static, y_test)
+        
+        from torch.utils.data import DataLoader
+        train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
+        
+        # Train
+        model, train_losses, val_losses = train_model(
+            train_loader=train_loader,
+            val_loader=val_loader,
+            temporal_dim=len(temporal_cols),
+            static_dim=3,
+            num_wards=len(stations) + 1
+        )
+        
+        # Save plots & metrics
+        plot_learning_curves(train_losses, val_losses)
+        
+        model.eval()
+        device = next(model.parameters()).device
+        test_preds = []
+        with torch.no_grad():
+            for batch_x_temp, batch_x_ward, batch_x_static, _ in test_loader:
+                batch_x_temp = batch_x_temp.to(device)
+                batch_x_ward = batch_x_ward.to(device)
+                batch_x_static = batch_x_static.to(device)
+                preds = model(batch_x_temp, batch_x_ward, batch_x_static)
+                test_preds.append(preds.cpu().numpy())
+                
+        y_pred = np.concatenate(test_preds, axis=0)
+        y_pred_raw = data_pipeline.inverse_transform_targets(y_pred)
+        y_test_raw = data_pipeline.inverse_transform_targets(y_test)
+        
+        metrics_dict, metrics_df = evaluate_predictions(y_test_raw, y_pred_raw)
+        save_metrics(metrics_dict, metrics_df)
+        
+        plot_prediction_vs_actual(y_test_raw, y_pred_raw)
+        plot_residuals(y_test_raw, y_pred_raw)
+        
+        print("   [ML Engine] Global model retraining on stations successfully finished.")
+        
+    # 2. Prediction / Fast Inference Phase
+    # Performs forecast predictions for stations and maps to Wards via IDW
+    stations = db.query(Station).all()
+    station_id_to_idx = {st.id: i for i, st in enumerate(stations)}
+    
+    cities = list(set([st.city for st in stations]))
+    city_name_to_idx = {c: i for i, c in enumerate(cities)}
+    
+    model_loaded = False
+    if not os.path.exists(SCALER_PATH) or not os.path.exists(CHECKPOINT_PATH):
+        print("   [ML Engine] Checkpoints not found. Using physics fallbacks.")
+    else:
+        try:
+            data_pipeline = MLDataPipeline()
+            data_pipeline.load(SCALER_PATH)
+            
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            checkpoint = torch.load(CHECKPOINT_PATH, map_location=device)
+            chk_cfg = checkpoint["config"]
+            
+            model = GlobalCNNLSTMForecaster(
+                temporal_dim=chk_cfg["temporal_dim"],
+                static_dim=chk_cfg["static_dim"],
+                num_wards=chk_cfg["num_wards"],
+                seq_len=chk_cfg["seq_len"],
+                hidden_dim=chk_cfg["hidden_dim"],
+                num_layers=chk_cfg["num_lstm_layers"],
+                dropout=chk_cfg["dropout"],
+                output_dim=6
+            ).to(device)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            model.eval()
+            model_loaded = True
+        except Exception as e:
+            print(f"   [ML Engine] Error loading model: {e}. Fallbacks active.")
+            model_loaded = False
+            
+    temporal_cols = get_temporal_feature_names()
+    
+    station_predictions = {}
+    
+    # Generate predictions per station
+    for st in stations:
+        # Fetch last 100 readings
+        readings_query = db.query(StationReading).filter(
+            StationReading.station_id == st.id,
+            StationReading.timestamp <= now
+        ).order_by(StationReading.timestamp.desc()).limit(100)
+        readings_list = list(readings_query)
+        readings_list.reverse()
+        
+        use_fallback = not model_loaded or len(readings_list) < 48
+        
+        if use_fallback:
+            # Fallback estimation values for this station
+            preds = {}
             for lead in [24, 48, 72]:
-                f_time = now + timedelta(hours=lead)
-                diurnal_t = 1.0 + 0.15 * math.sin((f_time.hour - 8) * math.pi / 12.0)
-                
-                latest_reading = db.query(Reading).filter(
-                    Reading.ward_id == ward.id
-                ).order_by(Reading.timestamp.desc()).first()
-                
+                latest_reading = readings_list[-1] if readings_list else None
                 if latest_reading:
-                    base_pm = latest_reading.pm25
-                    base_no2 = latest_reading.no2
-                    rand_shift = 1.0 + random.uniform(-0.15, 0.15)
-                    pred_pm = base_pm * diurnal_t * rand_shift
-                    pred_no2 = base_no2 * diurnal_t * rand_shift
+                    diurnal_t = 1.0 + 0.15 * math.sin((lead - 8) * math.pi / 12.0)
+                    pred_pm = latest_reading.pm25 * diurnal_t * (1.0 + random.uniform(-0.1, 0.1))
+                    pred_no2 = latest_reading.no2 * diurnal_t * (1.0 + random.uniform(-0.1, 0.1))
                 else:
-                    pred_pm = 100.0 if "Delhi" in ward.city.name else 40.0
-                    pred_no2 = 40.0 if "Delhi" in ward.city.name else 16.0
-                
-                pred_pm = float(round(max(5.0, pred_pm), 2))
-                pred_no2 = float(round(max(2.0, pred_no2), 2))
-                pred_aqi = float(round(calculate_pm25_aqi(pred_pm), 1))
-                
-                exists = db.query(Forecast).filter(
-                    Forecast.ward_id == ward.id,
-                    Forecast.timestamp == now,
-                    Forecast.forecast_time == f_time
-                ).first()
-                
-                if not exists:
-                    fc = Forecast(
-                        ward_id=ward.id,
-                        timestamp=now,
-                        forecast_time=f_time,
-                        predicted_pm25=pred_pm,
-                        predicted_no2=pred_no2,
-                        predicted_aqi=pred_aqi
-                    )
-                    db.add(fc)
-            db.commit()
+                    pred_pm = 100.0 if "Delhi" in st.city else 40.0
+                    pred_no2 = 40.0 if "Delhi" in st.city else 16.0
+                preds[lead] = (pred_pm, pred_no2)
+            station_predictions[st.id] = preds
             continue
             
-        # 2. Convert database readings to DataFrame
-        data = []
-        for r in readings_list:
-            data.append({
-                "timestamp": r.timestamp,
-                "pm25": r.pm25,
-                "no2": r.no2,
-                "temp": r.temp,
-                "humidity": r.humidity,
-                "wind_speed": r.wind_speed,
-                "wind_deg": r.wind_deg,
-                "stagnation": r.stagnation,
-                "hour": r.timestamp.hour,
-                "dayofweek": r.timestamp.weekday()
-            })
-        df = pd.DataFrame(data)
-        df.set_index("timestamp", inplace=True)
-        
-        # 3. Add dynamic upwind fire features
-        print(f"   [ML Engine] Computing dynamic upwind fire features for ward {ward.name}...")
-        fire_intensities = []
-        fire_counts = []
-        for idx, row in df.iterrows():
-            metrics = firms_proc.get_upwind_fire_metrics(
-                ward.latitude,
-                ward.longitude,
-                idx,
-                row["wind_speed"],
-                row["wind_deg"],
-                ward.city.name
-            )
-            fire_intensities.append(metrics["upwind_fire_intensity"])
-            fire_counts.append(metrics["upwind_fire_count"])
-            
-        df["upwind_fire_intensity"] = fire_intensities
-        df["upwind_fire_count"] = fire_counts
-        
-        features = ["pm25", "no2", "temp", "humidity", "wind_speed", "stagnation", "upwind_fire_intensity", "upwind_fire_count", "hour", "dayofweek"]
-        target_cols = ["pm25", "no2"]
-        seq_len = 24
-        
-        # Setup paths for models and scalers caching
-        models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "models"))
-        os.makedirs(models_dir, exist_ok=True)
-        scaler_path = os.path.join(models_dir, f"scaler_ward_{ward.id}.pkl")
-        
-        # Determine whether to load cached scaler or fit a new one
-        scaler_X = StandardScaler()
-        scaler_y = StandardScaler()
-        scaler_loaded = False
-        
-        if not retrain and os.path.exists(scaler_path):
-            try:
-                with open(scaler_path, "rb") as f:
-                    scaler_data = pickle.load(f)
-                    scaler_X = scaler_data["scaler_X"]
-                    scaler_y = scaler_data["scaler_y"]
-                    scaler_loaded = True
-            except Exception as e:
-                print(f"   [ML Engine] Failed to load scaler from {scaler_path}: {e}. Fitting a new one.")
-                
         try:
-            if scaler_loaded:
-                X_scaled = scaler_X.transform(df[features].values)
-                df_scaled = pd.DataFrame(X_scaled, columns=features, index=df.index)
-            else:
-                X_scaled = scaler_X.fit_transform(df[features].values)
-                y_scaled = scaler_y.fit_transform(df[target_cols].values)
-                df_scaled = pd.DataFrame(X_scaled, columns=features, index=df.index)
-                with open(scaler_path, "wb") as f:
-                    pickle.dump({"scaler_X": scaler_X, "scaler_y": scaler_y}, f)
+            data = []
+            for r in readings_list:
+                data.append({
+                    "timestamp": r.timestamp,
+                    "pm25": r.pm25,
+                    "no2": r.no2,
+                    "temp": r.temp,
+                    "humidity": r.humidity,
+                    "wind_speed": r.wind_speed,
+                    "wind_deg": r.wind_deg,
+                    "stagnation": r.stagnation,
+                    "upwind_fire_intensity": r.upwind_fire_intensity,
+                    "upwind_fire_count": r.upwind_fire_count
+                })
+            df = pd.DataFrame(data)
+            df.set_index("timestamp", inplace=True)
+            
+            df_engineered = engineer_features(df, drop_na=True)
+            if len(df_engineered) < config.seq_len:
+                raise ValueError("Insufficient station history")
+                
+            df_scaled = data_pipeline.transform_df(df_engineered)
+            last_seq = df_scaled.iloc[-config.seq_len:][temporal_cols].values
+            
+            city_encoded = city_name_to_idx.get(st.city, 0)
+            scaled_static = data_pipeline.transform_static(st.latitude, st.longitude, city_encoded)
+            
+            x_temp_t = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0).to(device)
+            x_ward_t = torch.tensor([station_id_to_idx[st.id]], dtype=torch.long).to(device)
+            x_static_t = torch.tensor([scaled_static], dtype=torch.float32).to(device)
+            
+            with torch.no_grad():
+                preds_scaled = model(x_temp_t, x_ward_t, x_static_t).cpu().numpy()
+                
+            preds_raw = data_pipeline.inverse_transform_targets(preds_scaled)[0]
+            
+            station_predictions[st.id] = {
+                24: (preds_raw[0], preds_raw[3]),
+                48: (preds_raw[1], preds_raw[4]),
+                72: (preds_raw[2], preds_raw[5])
+            }
         except Exception as e:
-            print(f"   [ML Engine] Scaling failed: {e}. Falling back to unscaled data.")
-            df_scaled = df.copy()
-            scaler_X = None
-            scaler_y = None
-        
-        # 4. Process predictions for the forecasting horizons
-        for lead in [24, 48, 72]:
-            latest_row = df.iloc[-1]
-            f_time = now + timedelta(hours=lead)
-            
-            # Construct training dataset from scaled dataframe
-            X_train, y_train = create_dataset_sequences(df_scaled, features, target_cols, seq_len=seq_len, lead=lead)
-            
-            if len(X_train) < 5:
-                # Fallback to diurnal physics prediction if history is too short for sequences
-                pred_pm = latest_row["pm25"] * (1.0 + 0.15 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
-                pred_no2 = latest_row["no2"] * (1.0 + 0.1 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
-            else:
-                model = CNNLSTMForecaster(input_dim=len(features), seq_len=seq_len)
-                model_path = os.path.join(models_dir, f"model_ward_{ward.id}_lead_{lead}.pth")
-                model_loaded = False
-                
-                # Try to load pre-trained weights to skip training
-                if not retrain and os.path.exists(model_path):
-                    try:
-                        model.load_state_dict(torch.load(model_path))
-                        model_loaded = True
-                    except Exception as e:
-                        print(f"   [ML Engine] Failed to load model from {model_path}: {e}. Retraining...")
-                
-                if not model_loaded:
-                    if not retrain:
-                        # Fallback to fast diurnal physics prediction to avoid blocking the sync thread
-                        pred_pm = latest_row["pm25"] * (1.0 + 0.15 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
-                        pred_no2 = latest_row["no2"] * (1.0 + 0.1 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
-                    else:
-                        print(f"   [ML Engine] Retraining CNN-LSTM forecaster model for ward {ward.name} (lead +{lead}h)...")
-                        # Convert sequences to PyTorch float tensors
-                        X_tensor = torch.tensor(X_train, dtype=torch.float32)
-                        y_tensor = torch.tensor(y_train, dtype=torch.float32)
-                        
-                        criterion = nn.MSELoss()
-                        optimizer = optim.Adam(model.parameters(), lr=0.005)
-                        
-                        model.train()
-                        epochs = 30
-                        batch_size = min(256, len(X_train))
-                        dataset_size = len(X_train)
-                        
-                        for epoch in range(epochs):
-                            permutation = torch.randperm(dataset_size)
-                            for i in range(0, dataset_size, batch_size):
-                                indices = permutation[i:i+batch_size]
-                                batch_x, batch_y = X_tensor[indices], y_tensor[indices]
-                                
-                                optimizer.zero_grad()
-                                outputs = model(batch_x)
-                                loss = criterion(outputs, batch_y)
-                                loss.backward()
-                                optimizer.step()
-                        
-                        # Cache the trained model weights
-                        try:
-                            torch.save(model.state_dict(), model_path)
-                        except Exception as e:
-                            print(f"   [ML Engine] Failed to save model state: {e}")
-                            
-                        # Perform rolling inference using the last seq_len steps (instantaneous)
-                        last_seq = df_scaled.iloc[-seq_len:][features].values
-                        model.eval()
-                        with torch.no_grad():
-                            input_seq = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0)
-                            pred = model(input_seq).numpy()[0]
-                            
-                            if scaler_y:
-                                pred_raw = scaler_y.inverse_transform(pred.reshape(1, -1))[0]
-                                pred_pm = float(pred_raw[0])
-                                pred_no2 = float(pred_raw[1])
-                            else:
-                                pred_pm = float(pred[0])
-                                pred_no2 = float(pred[1])
+            logger.error(f"Inference fail for station {st.name}: {e}")
+            preds = {}
+            for lead in [24, 48, 72]:
+                latest_reading = readings_list[-1] if readings_list else None
+                if latest_reading:
+                    pred_pm = latest_reading.pm25 * (1.0 + random.uniform(-0.1, 0.1))
+                    pred_no2 = latest_reading.no2 * (1.0 + random.uniform(-0.1, 0.1))
                 else:
-                    # Perform rolling inference using the last seq_len steps (instantaneous)
-                    last_seq = df_scaled.iloc[-seq_len:][features].values
-                    model.eval()
-                    with torch.no_grad():
-                        input_seq = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0)
-                        pred = model(input_seq).numpy()[0]
-                        
-                        if scaler_y:
-                            pred_raw = scaler_y.inverse_transform(pred.reshape(1, -1))[0]
-                            pred_pm = float(pred_raw[0])
-                            pred_no2 = float(pred_raw[1])
-                        else:
-                            pred_pm = float(pred[0])
-                            pred_no2 = float(pred[1])
+                    pred_pm = 50.0
+                    pred_no2 = 20.0
+                preds[lead] = (pred_pm, pred_no2)
+            station_predictions[st.id] = preds
             
-            pred_pm = round(max(5.0, pred_pm), 2)
-            pred_no2 = round(max(2.0, pred_no2), 2)
-            pred_aqi = round(calculate_pm25_aqi(pred_pm), 1)
-            
-            # Save predictions to SQLite database
-            exists = db.query(Forecast).filter(
-                Forecast.ward_id == ward.id,
-                Forecast.timestamp == now,
-                Forecast.forecast_time == f_time
-            ).first()
-            
-            if not exists:
-                fc = Forecast(
-                    ward_id=ward.id,
-                    timestamp=now,
-                    forecast_time=f_time,
-                    predicted_pm25=pred_pm,
-                    predicted_no2=pred_no2,
-                    predicted_aqi=pred_aqi
-                )
-                db.add(fc)
-                
-        db.commit()
+    # Run Ward Aggregation Layer via IDW mapping
+    station_mgr = StationManager()
+    station_mgr.aggregate_station_predictions(db, station_predictions, now)
+    
     print("Forecasting runs completed for all wards.")
