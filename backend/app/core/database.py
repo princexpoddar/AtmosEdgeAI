@@ -121,6 +121,50 @@ class Advisory(Base):
     
     ward = relationship("Ward", back_populates="advisories")
 
+class Station(Base):
+    __tablename__ = "stations"
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, index=True)
+    city = Column(String, index=True)
+    state = Column(String)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    elevation = Column(Float)
+    station_type = Column(String)
+    installation_date = Column(DateTime, nullable=True)
+    available_pollutants = Column(String)  # Comma-separated
+    quality_score = Column(Float, default=0.0)
+    
+    readings = relationship("StationReading", back_populates="station", cascade="all, delete-orphan")
+
+class StationReading(Base):
+    __tablename__ = "station_readings"
+    id = Column(Integer, primary_key=True, index=True)
+    station_id = Column(String, ForeignKey("stations.id"), index=True)
+    timestamp = Column(DateTime, index=True)
+    pm25 = Column(Float, nullable=True)
+    pm10 = Column(Float, nullable=True)
+    no2 = Column(Float, nullable=True)
+    so2 = Column(Float, nullable=True)
+    o3 = Column(Float, nullable=True)
+    co = Column(Float, nullable=True)
+    temp = Column(Float, nullable=True)
+    humidity = Column(Float, nullable=True)
+    surface_pressure = Column(Float, nullable=True)
+    wind_speed = Column(Float, nullable=True)
+    wind_deg = Column(Float, nullable=True)
+    precipitation = Column(Float, nullable=True)
+    pbl_height = Column(Float, nullable=True)
+    solar_radiation = Column(Float, nullable=True)
+    cloud_cover = Column(Float, nullable=True)
+    dew_point = Column(Float, nullable=True)
+    visibility = Column(Float, nullable=True)
+    upwind_fire_intensity = Column(Float, default=0.0)
+    upwind_fire_count = Column(Integer, default=0)
+    stagnation = Column(Float, default=0.0)
+    
+    station = relationship("Station", back_populates="readings")
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 
