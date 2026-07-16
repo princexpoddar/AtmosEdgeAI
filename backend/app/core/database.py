@@ -1,12 +1,26 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, ForeignKey, Text, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
-DATABASE_URL = "sqlite:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/geobreathe.db"
+db_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DATABASE_URL = f"sqlite:///{os.path.join(db_dir, 'geobreathe.db')}"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Enable multi-threaded check exemption and a 30-second busy timeout
+engine = create_engine(
+    DATABASE_URL, 
+    connect_args={"check_same_thread": False, "timeout": 30}
+)
+
+# Set WAL mode on SQLite connection to allow concurrent reads/writes
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
