@@ -11,7 +11,7 @@ __pycache__/
 *.pyd
 
 # Datasets and Databases (large files)
-backend/geobreathe.db
+# backend/geobreathe.db
 backend/data/
 
 # Frontend dependencies and builds
