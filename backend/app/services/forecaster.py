@@ -1,3 +1,5 @@
+import os
+import pickle
 import numpy as np
 import pandas as pd
 import math
@@ -8,6 +10,7 @@ from backend.app.core.database import Ward, Reading, Forecast
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from sklearn.preprocessing import StandardScaler
 
 # PyTorch CNN-LSTM model implementation matching the spatiotemporal architecture in the project PDF
 class CNNLSTMForecaster(nn.Module):
@@ -86,7 +89,7 @@ def create_dataset_sequences(df, features, target_cols, seq_len=24, lead=24):
         
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
 
-def generate_forecasts_for_all(db: Session):
+def generate_forecasts_for_all(db: Session, retrain: bool = False):
     """
     Core spatiotemporal Deep Learning Forecasting Engine.
     For each ward, extracts historical readings, precomputes upwind fire indicators,
@@ -100,14 +103,25 @@ def generate_forecasts_for_all(db: Session):
     firms_proc = get_firms_processor()
     
     for ward in wards:
-        # 1. Fetch historical readings for training (at least 7 days)
-        readings = db.query(Reading).filter(
-            Reading.ward_id == ward.id,
-            Reading.timestamp <= now
-        ).order_by(Reading.timestamp.asc())
-        
+        # 1. Fetch historical readings for training or fast inference
+        if not retrain:
+            # Query only the last 100 readings for fast inference
+            readings_query = db.query(Reading).filter(
+                Reading.ward_id == ward.id,
+                Reading.timestamp <= now
+            ).order_by(Reading.timestamp.desc()).limit(100)
+            readings_list = list(readings_query)
+            readings_list.reverse()
+        else:
+            # Query all historical readings for full retraining
+            readings_query = db.query(Reading).filter(
+                Reading.ward_id == ward.id,
+                Reading.timestamp <= now
+            ).order_by(Reading.timestamp.asc())
+            readings_list = list(readings_query)
+            
         # Fallback if insufficient data
-        if readings.count() < 48:
+        if len(readings_list) < 48:
             print(f"   [ML Engine] Insufficient data for ward {ward.name} (<48 rows). Using physics fallback.")
             for lead in [24, 48, 72]:
                 f_time = now + timedelta(hours=lead)
@@ -152,7 +166,7 @@ def generate_forecasts_for_all(db: Session):
             
         # 2. Convert database readings to DataFrame
         data = []
-        for r in readings:
+        for r in readings_list:
             data.append({
                 "timestamp": r.timestamp,
                 "pm25": r.pm25,
@@ -191,56 +205,133 @@ def generate_forecasts_for_all(db: Session):
         target_cols = ["pm25", "no2"]
         seq_len = 24
         
-        print(f"   [ML Engine] Training CNN-LSTM forecaster models for ward {ward.name}...")
+        # Setup paths for models and scalers caching
+        models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "models"))
+        os.makedirs(models_dir, exist_ok=True)
+        scaler_path = os.path.join(models_dir, f"scaler_ward_{ward.id}.pkl")
         
-        # 4. Train three sequential models for the forecasting horizons
+        # Determine whether to load cached scaler or fit a new one
+        scaler_X = StandardScaler()
+        scaler_y = StandardScaler()
+        scaler_loaded = False
+        
+        if not retrain and os.path.exists(scaler_path):
+            try:
+                with open(scaler_path, "rb") as f:
+                    scaler_data = pickle.load(f)
+                    scaler_X = scaler_data["scaler_X"]
+                    scaler_y = scaler_data["scaler_y"]
+                    scaler_loaded = True
+            except Exception as e:
+                print(f"   [ML Engine] Failed to load scaler from {scaler_path}: {e}. Fitting a new one.")
+                
+        try:
+            if scaler_loaded:
+                X_scaled = scaler_X.transform(df[features].values)
+                df_scaled = pd.DataFrame(X_scaled, columns=features, index=df.index)
+            else:
+                X_scaled = scaler_X.fit_transform(df[features].values)
+                y_scaled = scaler_y.fit_transform(df[target_cols].values)
+                df_scaled = pd.DataFrame(X_scaled, columns=features, index=df.index)
+                with open(scaler_path, "wb") as f:
+                    pickle.dump({"scaler_X": scaler_X, "scaler_y": scaler_y}, f)
+        except Exception as e:
+            print(f"   [ML Engine] Scaling failed: {e}. Falling back to unscaled data.")
+            df_scaled = df.copy()
+            scaler_X = None
+            scaler_y = None
+        
+        # 4. Process predictions for the forecasting horizons
         for lead in [24, 48, 72]:
             latest_row = df.iloc[-1]
             f_time = now + timedelta(hours=lead)
             
-            # Construct training dataset
-            X_train, y_train = create_dataset_sequences(df, features, target_cols, seq_len=seq_len, lead=lead)
+            # Construct training dataset from scaled dataframe
+            X_train, y_train = create_dataset_sequences(df_scaled, features, target_cols, seq_len=seq_len, lead=lead)
             
             if len(X_train) < 5:
                 # Fallback to diurnal physics prediction if history is too short for sequences
                 pred_pm = latest_row["pm25"] * (1.0 + 0.15 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
                 pred_no2 = latest_row["no2"] * (1.0 + 0.1 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
             else:
-                # Convert sequences to PyTorch float tensors
-                X_tensor = torch.tensor(X_train, dtype=torch.float32)
-                y_tensor = torch.tensor(y_train, dtype=torch.float32)
-                
-                # Initialize CNN-LSTM neural network
                 model = CNNLSTMForecaster(input_dim=len(features), seq_len=seq_len)
-                criterion = nn.MSELoss()
-                optimizer = optim.Adam(model.parameters(), lr=0.005)
+                model_path = os.path.join(models_dir, f"model_ward_{ward.id}_lead_{lead}.pth")
+                model_loaded = False
                 
-                # Fit the model for a fast 5 epochs
-                model.train()
-                epochs = 5
-                batch_size = min(256, len(X_train))
-                dataset_size = len(X_train)
+                # Try to load pre-trained weights to skip training
+                if not retrain and os.path.exists(model_path):
+                    try:
+                        model.load_state_dict(torch.load(model_path))
+                        model_loaded = True
+                    except Exception as e:
+                        print(f"   [ML Engine] Failed to load model from {model_path}: {e}. Retraining...")
                 
-                for epoch in range(epochs):
-                    permutation = torch.randperm(dataset_size)
-                    for i in range(0, dataset_size, batch_size):
-                        indices = permutation[i:i+batch_size]
-                        batch_x, batch_y = X_tensor[indices], y_tensor[indices]
+                if not model_loaded:
+                    if not retrain:
+                        # Fallback to fast diurnal physics prediction to avoid blocking the sync thread
+                        pred_pm = latest_row["pm25"] * (1.0 + 0.15 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
+                        pred_no2 = latest_row["no2"] * (1.0 + 0.1 * math.sin((f_time.hour - latest_row["hour"]) * math.pi / 12.0))
+                    else:
+                        print(f"   [ML Engine] Retraining CNN-LSTM forecaster model for ward {ward.name} (lead +{lead}h)...")
+                        # Convert sequences to PyTorch float tensors
+                        X_tensor = torch.tensor(X_train, dtype=torch.float32)
+                        y_tensor = torch.tensor(y_train, dtype=torch.float32)
                         
-                        optimizer.zero_grad()
-                        outputs = model(batch_x)
-                        loss = criterion(outputs, batch_y)
-                        loss.backward()
-                        optimizer.step()
+                        criterion = nn.MSELoss()
+                        optimizer = optim.Adam(model.parameters(), lr=0.005)
                         
-                # Perform rolling inference using the last seq_len steps
-                last_seq = df.iloc[-seq_len:][features].values
-                model.eval()
-                with torch.no_grad():
-                    input_seq = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0)
-                    pred = model(input_seq).numpy()[0]
-                    pred_pm = float(pred[0])
-                    pred_no2 = float(pred[1])
+                        model.train()
+                        epochs = 30
+                        batch_size = min(256, len(X_train))
+                        dataset_size = len(X_train)
+                        
+                        for epoch in range(epochs):
+                            permutation = torch.randperm(dataset_size)
+                            for i in range(0, dataset_size, batch_size):
+                                indices = permutation[i:i+batch_size]
+                                batch_x, batch_y = X_tensor[indices], y_tensor[indices]
+                                
+                                optimizer.zero_grad()
+                                outputs = model(batch_x)
+                                loss = criterion(outputs, batch_y)
+                                loss.backward()
+                                optimizer.step()
+                        
+                        # Cache the trained model weights
+                        try:
+                            torch.save(model.state_dict(), model_path)
+                        except Exception as e:
+                            print(f"   [ML Engine] Failed to save model state: {e}")
+                            
+                        # Perform rolling inference using the last seq_len steps (instantaneous)
+                        last_seq = df_scaled.iloc[-seq_len:][features].values
+                        model.eval()
+                        with torch.no_grad():
+                            input_seq = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0)
+                            pred = model(input_seq).numpy()[0]
+                            
+                            if scaler_y:
+                                pred_raw = scaler_y.inverse_transform(pred.reshape(1, -1))[0]
+                                pred_pm = float(pred_raw[0])
+                                pred_no2 = float(pred_raw[1])
+                            else:
+                                pred_pm = float(pred[0])
+                                pred_no2 = float(pred[1])
+                else:
+                    # Perform rolling inference using the last seq_len steps (instantaneous)
+                    last_seq = df_scaled.iloc[-seq_len:][features].values
+                    model.eval()
+                    with torch.no_grad():
+                        input_seq = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0)
+                        pred = model(input_seq).numpy()[0]
+                        
+                        if scaler_y:
+                            pred_raw = scaler_y.inverse_transform(pred.reshape(1, -1))[0]
+                            pred_pm = float(pred_raw[0])
+                            pred_no2 = float(pred_raw[1])
+                        else:
+                            pred_pm = float(pred[0])
+                            pred_no2 = float(pred[1])
             
             pred_pm = round(max(5.0, pred_pm), 2)
             pred_no2 = round(max(2.0, pred_no2), 2)

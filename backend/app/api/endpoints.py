@@ -80,6 +80,15 @@ def get_aqi_history(ward_id: int, hours: int = 24, db: Session = Depends(get_db)
         })
     return result
 
+@router.post("/aqi/sync")
+def sync_aqi_data(db: Session = Depends(get_db)):
+    from backend.app.services.realtime_updater import update_db_realtime
+    try:
+        res = update_db_realtime(db)
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/forecast")
 def get_forecast(ward_id: int, db: Session = Depends(get_db)):
     # Fetch recent forecasts (rolling lead hours)
@@ -174,11 +183,14 @@ def get_ward_advisory(ward_id: int, db: Session = Depends(get_db)):
 
 # We handle JSON payloads for chat
 from pydantic import BaseModel
+from typing import Optional
+
 class ChatRequest(BaseModel):
     query: str
     ward_id: int
+    gemini_api_key: Optional[str] = None
 
 @router.post("/advisory/chat")
 def advisory_chat(payload: ChatRequest, db: Session = Depends(get_db)):
-    response = generate_chat_response(payload.query, payload.ward_id, db)
+    response = generate_chat_response(payload.query, payload.ward_id, db, payload.gemini_api_key)
     return {"response": response}
