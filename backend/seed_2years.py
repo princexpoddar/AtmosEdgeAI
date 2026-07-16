@@ -1,4 +1,5 @@
 import os
+import sys
 import gzip
 import math
 import random
@@ -7,6 +8,9 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
+
+# Setup Python path to find the backend app modules
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import backend resources
 from backend.app.core.database import SessionLocal, City, Ward, Reading, Forecast, Attribution, EnforcementTarget, Advisory, init_db, Station, StationReading
@@ -161,3 +165,50 @@ def seed_2years_history():
 
 if __name__ == "__main__":
     seed_2years_history()
+
+def generate_modeled_pm25(row, city_name: str) -> float:
+    """
+    Backward-compatible weather-diurnal-seasonal PM2.5 proxy data generator.
+    """
+    from backend.app.services.data_pipeline.preprocessor import calculate_stagnation
+    timestamp = row.name
+    month = timestamp.month
+    hour = timestamp.hour
+    
+    if "Delhi" in city_name:
+        if month in [11, 12, 1]:  # Winter
+            base = 190.0
+        elif month in [10, 2]:    # Shoulder winter
+            base = 135.0
+        elif month in [3, 4, 9]:  # Spring/Autumn
+            base = 85.0
+        else:                     # Summer/Monsoon
+            base = 48.0
+    else:  # Bengaluru
+        if month in [12, 1, 2]:
+            base = 40.0
+        else:
+            base = 28.0
+            
+    wind_ms = (row["wind_speed"] or 0.0) / 3.6
+    pbl = row["pbl_height"] or 500.0
+    stagnation = calculate_stagnation(wind_ms, pbl)
+    stagnation_mult = 0.5 + (stagnation * 1.5)
+    
+    humidity = row["humidity"] or 50.0
+    washout_mult = 1.0
+    if humidity > 80.0 and month in [6, 7, 8]:
+        washout_mult = 0.55
+    elif humidity < 30.0:
+        washout_mult = 1.15
+        
+    diurnal_mult = 1.0
+    if (8 <= hour <= 10) or (18 <= hour <= 21):
+        diurnal_mult = 1.35
+    elif (2 <= hour <= 5):
+        diurnal_mult = 0.75
+        
+    noise = random.uniform(0.88, 1.12)
+    pm25 = base * stagnation_mult * washout_mult * diurnal_mult * noise
+    return float(round(max(4.0, pm25), 2))
+
