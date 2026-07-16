@@ -8,7 +8,6 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 from sklearn.feature_selection import mutual_info_regression
