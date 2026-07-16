@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, ForeignKey, Text, event
+from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, ForeignKey, Text, event, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
@@ -139,6 +139,7 @@ class Station(Base):
 
 class StationReading(Base):
     __tablename__ = "station_readings"
+    __table_args__ = (UniqueConstraint('station_id', 'timestamp', name='_station_timestamp_uc'),)
     id = Column(Integer, primary_key=True, index=True)
     station_id = Column(String, ForeignKey("stations.id"), index=True)
     timestamp = Column(DateTime, index=True)
