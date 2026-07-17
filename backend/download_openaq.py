@@ -1,12 +1,40 @@
 import os
+import sys
+import json
 import subprocess
 import time
 
-# List of all default stations from backend/app/services/ingestion.py
+# Load config dynamically from core/ml_config.json
+base_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(base_dir, "app", "core", "ml_config.json")
+
+# Default values if config not found
 STATION_IDS = [70273, 70295, 70354, 70367, 8556, 8160, 8161, 8180, 8185, 238383]
-YEARS = [2024, 2025, 2026]
+history_years = 2
+
+if os.path.exists(config_path):
+    try:
+        with open(config_path, "r") as f:
+            cfg = json.load(f)
+            hist_stations = cfg.get("ingestion", {}).get("openaq_historical_stations", {})
+            rt_stations = cfg.get("ingestion", {}).get("openaq_v3_realtime_locations", {})
+            
+            # Combine all unique station IDs
+            all_stations = set(list(hist_stations.values()) + list(rt_stations.values()))
+            if all_stations:
+                STATION_IDS = sorted(list(all_stations))
+            
+            history_years = cfg.get("ingestion", {}).get("history_years", history_years)
+    except Exception as e:
+        print(f"Error loading ml_config.json: {e}. Using defaults.")
+
+# Calculate YEARS based on history_years
+current_year = time.localtime().tm_year
+YEARS = list(range(current_year - history_years, current_year + 1))
+
 S3_BUCKET = "s3://openaq-data-archive"
-LOCAL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "openaq"))
+LOCAL_DIR = os.path.abspath(os.path.join(base_dir, "data", "openaq"))
+
 
 print("--- Starting OpenAQ AWS CLI Data Download ---")
 print(f"Target Stations: {STATION_IDS}")

@@ -60,7 +60,7 @@ class StationManager:
         # Countries ID for India in OpenAQ is IN. Let's try iso=IN and countries_id=IN.
         url = "https://api.openaq.org/v3/locations"
         params = {
-            "countries_id": "IN",
+            "iso": "IN",
             "limit": 500
         }
         
@@ -136,8 +136,24 @@ class StationManager:
                 
             # History calculation
             try:
-                first = datetime.fromisoformat(st["datetimeFirst"].replace("Z", "+00:00"))
-                last = datetime.fromisoformat(st["datetimeLast"].replace("Z", "+00:00"))
+                first_val = st.get("datetimeFirst")
+                last_val = st.get("datetimeLast")
+                
+                if isinstance(first_val, dict):
+                    first_str = first_val.get("utc")
+                else:
+                    first_str = first_val
+                    
+                if isinstance(last_val, dict):
+                    last_str = last_val.get("utc")
+                else:
+                    last_str = last_val
+                
+                if not first_str or not last_str:
+                    raise ValueError("Missing first or last datetime")
+                    
+                first = datetime.fromisoformat(first_str.replace("Z", "+00:00"))
+                last = datetime.fromisoformat(last_str.replace("Z", "+00:00"))
                 history_days = (last - first).days
                 history_years = history_days / 365.25
             except Exception:

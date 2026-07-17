@@ -45,19 +45,60 @@ class OpenAQCollector:
         except Exception as e:
             logger.error(f"Failed to save manifest: {e}")
 
-    def fetch_station_chunk(
+    def get_station_sensors(self, station_id: str, headers: Dict[str, str]) -> Dict[str, int]:
+        """
+        Fetches the mapping of pollutant name to sensor ID for a location in OpenAQ V3.
+        """
+        url = f"https://api.openaq.org/v3/locations/{station_id}/sensors"
+        max_retries = 5
+        backoff = 2.0
+        
+        for retry in range(max_retries):
+            try:
+                time.sleep(1.2) # Rate limit protection
+                r = requests.get(url, headers=headers, timeout=20)
+                if r.status_code == 200:
+                    results = r.json().get("results", [])
+                    mapping = {}
+                    for sensor in results:
+                        sensor_id = sensor.get("id")
+                        param_name = sensor.get("parameter", {}).get("name", "").lower()
+                        if sensor_id and param_name:
+                            mapping[param_name] = sensor_id
+                    return mapping
+                elif r.status_code == 429:
+                    logger.warning(f"Rate limited (429) on location {station_id} sensors. Sleeping {backoff}s...")
+                    time.sleep(backoff)
+                    backoff *= 2.0
+                else:
+                    logger.error(f"Error fetching sensors for location {station_id}: {r.status_code}")
+                    if r.status_code >= 500:
+                        time.sleep(backoff)
+                        backoff *= 2.0
+                    else:
+                        break
+            except Exception as e:
+                logger.error(f"Exception fetching sensors for location {station_id}: {e}")
+                time.sleep(backoff)
+                backoff *= 2.0
+                
+        return {}
+
+    def fetch_sensor_measurements(
         self, 
-        station_id: str, 
+        sensor_id: int, 
+        parameter_name: str,
         start_date: datetime, 
         end_date: datetime, 
         headers: Dict[str, str]
     ) -> List[Dict[str, Any]]:
         """
-        Downloads a chunk of measurements for a single station with exponential backoff.
+        Fetches raw measurements for a specific sensor ID with backoff and pagination.
+        Formats values into standard format compatible with the preprocessor parser.
+        Returns None if download fails after retries.
         """
-        url = f"https://api.openaq.org/v3/locations/{station_id}/measurements"
+        url = f"https://api.openaq.org/v3/sensors/{sensor_id}/measurements"
         
-        # Format times as ISO strings in UTC
         start_str = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         end_str = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         
@@ -68,49 +109,65 @@ class OpenAQCollector:
             "page": 1
         }
         
-        all_measurements = []
+        measurements = []
         max_retries = 5
         
         while True:
             retry_count = 0
             backoff = 2.0
+            success = False
             
             while retry_count < max_retries:
                 try:
+                    time.sleep(1.2) # Rate limit protection
                     r = requests.get(url, headers=headers, params=params, timeout=20)
                     if r.status_code == 200:
                         data = r.json()
                         results = data.get("results", [])
-                        all_measurements.extend(results)
                         
-                        # Pagination check
+                        # Convert to compatible parsing format
+                        for item in results:
+                            dt_str = item.get("period", {}).get("datetimeTo")
+                            val = item.get("value")
+                            if val is not None and dt_str:
+                                measurements.append({
+                                    "parameter": {"name": parameter_name},
+                                    "value": float(val),
+                                    "period": {"datetimeTo": dt_str}
+                                })
+                                
                         meta = data.get("meta", {})
-                        total = meta.get("found", 0)
+                        found_val = meta.get("found", 0)
+                        if isinstance(found_val, str):
+                            found_val = found_val.replace(">", "").strip()
+                        total = int(found_val or 0)
                         limit = params["limit"]
                         page = params["page"]
                         
+                        success = True
                         if page * limit >= total or not results:
-                            return all_measurements
+                            return measurements
                         else:
                             params["page"] += 1
-                            break # Go to next page
+                            break # Move to next page
                     elif r.status_code == 429:
-                        logger.warning(f"Rate limit (429) hit for station {station_id}. Retrying in {backoff}s...")
+                        logger.warning(f"Rate limited (429) on sensor {sensor_id}. Sleeping {backoff}s...")
+                        time.sleep(backoff)
+                        backoff *= 2.0
+                    else:
+                        logger.error(f"Error {r.status_code} fetching measurements for sensor {sensor_id}. Sleeping {backoff}s...")
                         time.sleep(backoff)
                         backoff *= 2.0
                         retry_count += 1
-                    else:
-                        logger.error(f"OpenAQ API returned error {r.status_code} for station {station_id}")
-                        return all_measurements
                 except Exception as e:
-                    logger.error(f"API request failed: {e}. Retrying...")
+                    logger.error(f"Exception fetching measurements for sensor {sensor_id}: {e}")
                     time.sleep(backoff)
                     backoff *= 2.0
                     retry_count += 1
-            
-            if retry_count >= max_retries:
-                logger.error(f"Max retries exceeded for station {station_id} in period {start_str} - {end_str}")
-                return all_measurements
+                    
+            if not success:
+                logger.error(f"Max retries exceeded for sensor {sensor_id}")
+                return None
 
     def collect_station_historical(
         self, 
@@ -120,14 +177,19 @@ class OpenAQCollector:
         chunk_days: int = 30
     ) -> List[Dict[str, Any]]:
         """
-        Performs incremental data collection for a single station.
-        Splits timeframe into chunks and caches results locally.
+        Runs incremental data collection by querying active sensors and fetching their observations.
         """
         station_dir = os.path.join(self.raw_dir, station_id)
         os.makedirs(station_dir, exist_ok=True)
         
         headers = get_openaq_headers()
         
+        # Discover sensors first
+        sensor_mapping = self.get_station_sensors(station_id, headers)
+        if not sensor_mapping:
+            logger.warning(f"No sensors mapped for Station {station_id}. Skipping.")
+            return []
+            
         manifest = self.load_manifest()
         station_manifest = manifest["OpenAQ"].get(station_id, {})
         
@@ -145,15 +207,31 @@ class OpenAQCollector:
             
             chunk_file = os.path.join(station_dir, f"{chunk_key}.json")
             
-            # Check if this chunk is already downloaded
+            # Check manifest for completeness
             if os.path.exists(chunk_file) and chunk_key in station_manifest.get("completed_chunks", []):
-                # Already processed
                 current_dt = chunk_end
                 continue
                 
             logger.info(f"Downloading OpenAQ chunk for Station {station_id}: {chunk_key}")
-            chunk_data = self.fetch_station_chunk(station_id, current_dt, chunk_end, headers)
             
+            # Fetch measurements for target pollutants
+            chunk_data = []
+            chunk_failed = False
+            for param, sensor_id in sensor_mapping.items():
+                if param in ["pm25", "no2", "pm10", "so2", "co", "o3"]:
+                    sensor_measurements = self.fetch_sensor_measurements(
+                        sensor_id, param, current_dt, chunk_end, headers
+                    )
+                    if sensor_measurements is None:
+                        chunk_failed = True
+                        break
+                    chunk_data.extend(sensor_measurements)
+            
+            if chunk_failed:
+                logger.error(f"Failed to complete download for chunk {chunk_key} of station {station_id}. Will retry on next run.")
+                current_dt = chunk_end
+                continue
+                
             if chunk_data:
                 try:
                     with open(chunk_file, "w") as f:
@@ -162,7 +240,6 @@ class OpenAQCollector:
                 except Exception as e:
                     logger.error(f"Failed to save chunk file {chunk_file}: {e}")
             
-            # Record chunk in manifest
             if "completed_chunks" not in station_manifest:
                 station_manifest["completed_chunks"] = []
             if chunk_key not in station_manifest["completed_chunks"]:
@@ -179,7 +256,7 @@ class OpenAQCollector:
 
     def run_parallel_collection(self, station_ids: List[str], start_year: int, end_year: int, max_workers: int = 4) -> None:
         """
-        Executes multi-threaded historical collection for all station IDs.
+        Executes multi-threaded historical collection.
         """
         logger.info(f"Starting parallel OpenAQ historical download for {len(station_ids)} stations ({start_year}-{end_year})...")
         

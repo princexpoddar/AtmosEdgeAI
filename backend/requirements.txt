@@ -8,3 +8,7 @@ numpy
 shapely
 requests
 torch
+matplotlib
+pyarrow
+xgboost
+

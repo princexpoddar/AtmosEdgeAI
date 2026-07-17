@@ -154,6 +154,8 @@ class StationReading(Base):
     surface_pressure = Column(Float, nullable=True)
     wind_speed = Column(Float, nullable=True)
     wind_deg = Column(Float, nullable=True)
+    wind_u = Column(Float, nullable=True)
+    wind_v = Column(Float, nullable=True)
     precipitation = Column(Float, nullable=True)
     pbl_height = Column(Float, nullable=True)
     solar_radiation = Column(Float, nullable=True)

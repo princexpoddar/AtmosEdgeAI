@@ -10,7 +10,7 @@ from backend.app.services.ml.config import config, BASE_DIR
 
 logger = logging.getLogger(__name__)
 
-FIRMS_DIR_DEFAULT = os.path.abspath(os.path.join(BASE_DIR, "data", "data", "firms"))
+FIRMS_DIR_DEFAULT = os.path.abspath(os.path.join(BASE_DIR, "data", "firms"))
 
 # India-wide bounding box bounds for fire filtering
 INDIA_BOUNDS = {
@@ -32,31 +32,60 @@ class FirmsCollector:
     def load_and_clean_data(self) -> None:
         """
         Loads and indexes MODIS & VIIRS fire archive CSV files.
-        Filters records to keep only those within India's boundary bounds to speed up search.
+        Auto-discovers year-based files (modis_YYYY_India.csv, viirs-jpss1_YYYY_India.csv)
+        as well as legacy archive/NRT filenames.
+        Filters records to keep only those within India's boundary bounds.
         """
         logger.info(f"Initializing NASA FIRMS biomass data extraction from {self.data_dir}...")
-        
-        files = {
+
+        import glob as _glob
+
+        # --- Discover all available files ---
+        # Pattern 1: year-based files downloaded from FIRMS country portal
+        modis_year_files  = sorted(_glob.glob(os.path.join(self.data_dir, "modis_*_India.csv")))
+        viirs_year_files  = sorted(_glob.glob(os.path.join(self.data_dir, "viirs-jpss1_*_India.csv")))
+        viirs_snpp_files  = sorted(_glob.glob(os.path.join(self.data_dir, "viirs-snpp_*_India.csv")))
+
+        # Pattern 2: legacy archive/NRT filenames
+        legacy_files = {
             "MODIS_ARCHIVE": "fire_archive_M-C61_774045.csv",
-            "MODIS_NRT": "fire_nrt_M-C61_774045.csv",
+            "MODIS_NRT":     "fire_nrt_M-C61_774045.csv",
             "VIIRS_ARCHIVE": "fire_archive_SV-C2_774046.csv",
-            "VIIRS_NRT": "fire_nrt_SV-C2_774046.csv"
+            "VIIRS_NRT":     "fire_nrt_SV-C2_774046.csv",
         }
-        
+
+        file_entries = []  # list of (path, is_viirs)
+        for p in modis_year_files:
+            file_entries.append((p, False))
+        for p in viirs_year_files + viirs_snpp_files:
+            file_entries.append((p, True))
+        for key, fname in legacy_files.items():
+            p = os.path.join(self.data_dir, fname)
+            if os.path.exists(p) and os.path.getsize(p) > 200:  # skip empty stubs
+                file_entries.append((p, "VIIRS" in key))
+
+        if not file_entries:
+            logger.warning("No FIRMS CSV files found in data_dir.")
+
+        logger.info(f"Found {len(file_entries)} FIRMS file(s) to load.")
+
         all_dfs = []
-        for key, filename in files.items():
-            path = os.path.join(self.data_dir, filename)
-            if not os.path.exists(path):
-                logger.warning(f"FIRMS archive file {filename} not found.")
-                continue
-                
+        for path, is_viirs in file_entries:
             try:
-                # Load only relevant columns for space efficiency
-                df = pd.read_csv(path, usecols=["latitude", "longitude", "acq_date", "acq_time", "confidence", "frp"])
-                
+                # Detect available columns first
+                header_df = pd.read_csv(path, nrows=0)
+                available = set(header_df.columns.tolist())
+                use_cols = [c for c in ["latitude", "longitude", "acq_date", "acq_time", "confidence", "frp"]
+                            if c in available]
+                if len(use_cols) < 4:
+                    logger.warning(f"Skipping {os.path.basename(path)}: missing required columns.")
+                    continue
+
+                df = pd.read_csv(path, usecols=use_cols)
+
                 # Confidence filter
-                if "VIIRS" in key:
-                    df = df[df["confidence"] != "l"]
+                if is_viirs:
+                    df = df[df["confidence"] != "l"] if "confidence" in df.columns else df
                 else:
                     df["confidence_numeric"] = pd.to_numeric(df["confidence"], errors="coerce")
                     df = df[(df["confidence_numeric"].isna()) | (df["confidence_numeric"] >= 50)]
@@ -77,7 +106,7 @@ class FirmsCollector:
                 
                 all_dfs.append(df[["latitude", "longitude", "timestamp_utc", "frp"]])
             except Exception as e:
-                logger.error(f"Error reading FIRMS file {filename}: {e}")
+                logger.error(f"Error reading FIRMS file {os.path.basename(path)}: {e}")
                 
         if all_dfs:
             self.fires_df = pd.concat(all_dfs, ignore_index=True)
@@ -87,39 +116,62 @@ class FirmsCollector:
         else:
             logger.warning("No biomass fire detections loaded.")
 
+    def get_station_fires(self, lat: float, lng: float) -> pd.DataFrame:
+        """
+        Pre-filters and crops self.fires_df to a bounding box around the station.
+        This speeds up hourly indexing by several orders of magnitude.
+        """
+        if self.fires_df.empty:
+            return pd.DataFrame()
+        in_bbox = (
+            (self.fires_df["latitude"] >= lat - INDIA_BOUNDS["lat_deg_diff"]) &
+            (self.fires_df["latitude"] <= lat + INDIA_BOUNDS["lat_deg_diff"]) &
+            (self.fires_df["longitude"] >= lng - INDIA_BOUNDS["lon_deg_diff"]) &
+            (self.fires_df["longitude"] <= lng + INDIA_BOUNDS["lon_deg_diff"])
+        )
+        return self.fires_df[in_bbox]
+
     def get_upwind_fire_metrics(
         self, 
         lat: float, 
         lng: float, 
         timestamp: datetime, 
         wind_speed: float, 
-        wind_deg: float
+        wind_deg: float,
+        station_fires: pd.DataFrame = None
     ) -> Dict[str, Any]:
         """
         Calculates upwind fire metrics (vectorized implementation for fast evaluation).
+        Uses station_fires dataframe if provided for optimized slicing speed.
         """
         metrics = {"upwind_fire_intensity": 0.0, "upwind_fire_count": 0}
-        if self.fires_df.empty:
+        
+        source_df = self.fires_df if station_fires is None else station_fires
+        if source_df.empty:
             return metrics
             
         # Limit calculations to last 24 hours
         start_time = timestamp - timedelta(hours=24)
         try:
-            active_fires = self.fires_df.loc[start_time:timestamp]
+            active_fires = source_df.loc[start_time:timestamp]
         except KeyError:
-            active_fires = self.fires_df[(self.fires_df["timestamp_utc"] >= start_time) & (self.fires_df["timestamp_utc"] <= timestamp)]
+            active_fires = source_df[(source_df["timestamp_utc"] >= start_time) & (source_df["timestamp_utc"] <= timestamp)]
             
         if active_fires.empty:
             return metrics
             
-        # Coarse filter box to speed up distance checks
-        in_bbox = (
-            (active_fires["latitude"] >= lat - INDIA_BOUNDS["lat_deg_diff"]) &
-            (active_fires["latitude"] <= lat + INDIA_BOUNDS["lat_deg_diff"]) &
-            (active_fires["longitude"] >= lng - INDIA_BOUNDS["lon_deg_diff"]) &
-            (active_fires["longitude"] <= lng + INDIA_BOUNDS["lon_deg_diff"])
-        )
-        spatial_fires = active_fires[in_bbox]
+        # If using global fires_df, apply bbox filter first
+        if station_fires is None:
+            in_bbox = (
+                (active_fires["latitude"] >= lat - INDIA_BOUNDS["lat_deg_diff"]) &
+                (active_fires["latitude"] <= lat + INDIA_BOUNDS["lat_deg_diff"]) &
+                (active_fires["longitude"] >= lng - INDIA_BOUNDS["lon_deg_diff"]) &
+                (active_fires["longitude"] <= lng + INDIA_BOUNDS["lon_deg_diff"])
+            )
+            spatial_fires = active_fires[in_bbox]
+        else:
+            spatial_fires = active_fires
+            
         if spatial_fires.empty:
             return metrics
             

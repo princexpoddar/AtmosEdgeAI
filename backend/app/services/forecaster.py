@@ -137,8 +137,10 @@ def generate_forecasts_for_all(db: Session, retrain: bool = False) -> None:
             print(f"   [ML Engine] ERROR: Feature Cache file not found. Ingest historical data first.")
             return
             
-        with open(FEATURE_CACHE_PATH, "rb") as f:
-            station_dfs = pickle.load(f)
+        df_combined = pd.read_parquet(FEATURE_CACHE_PATH)
+        station_dfs = {}
+        for sid, df_sub in df_combined.groupby("station_id"):
+            station_dfs[sid] = df_sub.drop(columns=["station_id"])
             
         if not station_dfs:
             logger.error("Feature Cache is empty. Retraining aborted.")

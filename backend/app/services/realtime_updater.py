@@ -10,22 +10,8 @@ from backend.app.services.ingestion import calculate_stagnation, fetch_openmeteo
 from backend.app.services.forecaster import generate_forecasts_for_all, calculate_pm25_aqi
 from backend.app.services.attribution import run_attribution_for_all
 from backend.seed_2years import generate_modeled_pm25
+from backend.app.services.ml.config import config
 
-# Ward name to active OpenAQ V3 Location ID mapping (Verified active today in 2026)
-WARD_V3_LOCATIONS = {
-    # Delhi NCR
-    "East Delhi": 235,                # Anand Vihar, New Delhi - DPCC
-    "Dwarka": 5622,                   # NSIT Dwarka, Delhi - CPCB
-    "Connaught Place": 5613,          # ITO, New Delhi - CPCB
-    "Okhla Industrial Area": 5586,     # Sirifort, Delhi - CPCB
-    "Rohini": 5610,                   # North Campus, DU, Delhi - IMD
-    # Bengaluru
-    "Whitefield": 3409312,            # BWSSB Kadabesanahalli, Bengaluru - CPCB
-    "Koramangala": 5548,              # BTM Layout, Bengaluru - CPCB
-    "Indiranagar": 5574,              # City Railway Station, Bengaluru - KSPCB
-    "Electronic City": 6973,          # Jayanagar 5th Block, Bengaluru - KSPCB
-    "Peenya Industrial Area": 5644    # Sanegurava Halli, Bengaluru - KSPCB
-}
 
 def get_openaq_api_key():
     env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
@@ -114,8 +100,9 @@ def update_db_realtime(db: Session) -> dict:
         met_df.set_index("timestamp_utc", inplace=True)
         
         # Get live OpenAQ V3 measurements
-        location_id = WARD_V3_LOCATIONS.get(w.name)
+        location_id = config.openaq_v3_realtime_locations.get(w.name)
         live_openaq = {}
+
         if location_id:
             live_openaq = fetch_openaq_v3_latest(location_id, api_key)
             
