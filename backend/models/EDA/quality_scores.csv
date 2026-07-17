@@ -1,0 +1,41 @@
+station_id,name,city,quality_score
+860,"Sanjay Palace, Agra - UPPCB",Agra,96.65
+5576,"Moti Doongri, Alwar - RSPCB",Alwar,97.48
+5551,"Golden Temple, Amritsar - PPCB",Amritsar,97.5
+5548,"BTM Layout, Bengaluru - CPCB",Bengaluru,96.96
+5547,"BWSSB Kadabesanahalli, Bengaluru - CPCB",Bengaluru,95.36
+5667,"Bhopal Chauraha, Dewas - MPPCB",Bhopal,97.5
+2586,"Manali, Chennai - CPCB",Chennai,100.0
+5558,"Alandur Bus Depot, Chennai - CPCB",Chennai,97.5
+5655,"Velachery Res. Area, Chennai - CPCB",Chennai,95.11
+6359,"IHBAS, Dilshad Garden,New Delhi - CPCB",Delhi,96.55
+6931,"Dwarka-Sector 8, Delhi - DPCC ",Delhi,94.55
+6358,"Mandir Marg, New Delhi - DPCC",Delhi,94.55
+6357,"Punjabi Bagh, Delhi - DPCC",Delhi,93.92
+5570,"Aya Nagar, New Delhi - IMD",Delhi,92.92
+6924,"Indirapuram, Ghaziabad - UPPCB",Ghaziabad,84.55
+301,"Vikas Sadan, Gurugram - HSPCB",Gurugram,100.0
+10844,"Ghusuri, Howrah - WBPCB",Howrah,96.03
+6946,"Belur Math, Howrah - WBPCB",Howrah,88.57
+10896,"Chhoti Gwaltoli, Indore - MPPCB",Indore,75.22
+5542,"Civil Line, Jalandhar - PPCB",Jalandhar,92.87
+5662,"Nehru Nagar, Kanpur - UPPCB",Kanpur,96.98
+10633,"Victoria, Kolkata - WBPCB",Kolkata,92.9
+6950,"Jadavpur, Kolkata - WBPCB",Kolkata,88.17
+2456,"Talkatora District Industries Center, Lucknow - CPCB",Lucknow,100.0
+5659,"Lalbagh, Lucknow - CPCB",Lucknow,97.5
+5657,"Central School, Lucknow - CPCB",Lucknow,97.5
+5569,"Punjab Agricultural University, Ludhiana - PPCB",Ludhiana,97.5
+6945,"Kurla, Mumbai - MPCB",Mumbai,87.44
+6948,"Chhatrapati Shivaji Intl. Airport (T2), Mumbai - MPCB",Mumbai,85.82
+6943,"Mahape, Navi Mumbai - MPCB",Mumbai,83.56
+2583,"Sector-6, Panchkula - HSPCB ",Other,100.0
+10545,"Civil Lines, Ajmer - RSPCB",Other,96.78
+6940,"Kalal Majra, Khanna - PPCB",Other,96.72
+2596,"Solapur, Solapur - MPCB",Other,95.4
+5559,"Collectorate, Gaya - BSPCB",Other,94.78
+10599,"Rajbansi Nagar, Patna - BSPCB",Patna,76.37
+10697,"Samanpura, Patna - BSPCB",Patna,76.27
+10670,"Muradpur, Patna - BSPCB",Patna,75.3
+5661,"Karve Road Pune, Pune - MPCB",Pune,93.18
+site_107,"Pusa, Delhi - IMD",Delhi,98.0

@@ -1,0 +1,36 @@
+model,horizon,mae,rmse
+Persistence,PM2.5 24h,0.4538,0.724
+Persistence,PM2.5 48h,0.5365,0.825
+Persistence,PM2.5 72h,0.591,0.8801
+Persistence,NO2 24h,0.4309,0.7444
+Persistence,NO2 48h,0.5029,0.8532
+Persistence,NO2 72h,0.5475,0.909
+Persistence,Overall,0.5104,0.8226
+Linear Regression,PM2.5 24h,0.4269,0.643
+Linear Regression,PM2.5 48h,0.4917,0.7129
+Linear Regression,PM2.5 72h,0.5294,0.7559
+Linear Regression,NO2 24h,0.4352,0.6767
+Linear Regression,NO2 48h,0.5043,0.7665
+Linear Regression,NO2 72h,0.5407,0.8054
+Linear Regression,Overall,0.488,0.7267
+Random Forest,PM2.5 24h,0.454,0.6727
+Random Forest,PM2.5 48h,0.511,0.7569
+Random Forest,PM2.5 72h,0.5503,0.7959
+Random Forest,NO2 24h,0.4795,0.7418
+Random Forest,NO2 48h,0.5385,0.8182
+Random Forest,NO2 72h,0.5694,0.8516
+Random Forest,Overall,0.5171,0.7729
+XGBoost,PM2.5 24h,0.4136,0.6341
+XGBoost,PM2.5 48h,0.4957,0.7433
+XGBoost,PM2.5 72h,0.5503,0.8176
+XGBoost,NO2 24h,0.4304,0.7005
+XGBoost,NO2 48h,0.5028,0.7975
+XGBoost,NO2 72h,0.586,0.9053
+XGBoost,Overall,0.4965,0.7664
+CNN-LSTM,PM2.5 24h,0.5238,0.7646
+CNN-LSTM,PM2.5 48h,0.5479,0.8026
+CNN-LSTM,PM2.5 72h,0.5642,0.8172
+CNN-LSTM,NO2 24h,0.5356,0.8355
+CNN-LSTM,NO2 48h,0.5729,0.8933
+CNN-LSTM,NO2 72h,0.5974,0.9219
+CNN-LSTM,Overall,0.557,0.8392

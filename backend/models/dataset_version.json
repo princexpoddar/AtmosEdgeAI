@@ -1,0 +1,34 @@
+{
+  "dataset_version": "v1.0.0",
+  "generated_at": "2026-07-17T16:04:01.020628Z",
+  "rows": 2068656,
+  "stations": 40,
+  "features": [
+    "pm25",
+    "no2",
+    "pm10",
+    "so2",
+    "o3",
+    "co",
+    "temp",
+    "humidity",
+    "surface_pressure",
+    "wind_speed",
+    "wind_deg",
+    "precipitation",
+    "pbl_height",
+    "solar_radiation",
+    "cloud_cover",
+    "dew_point",
+    "visibility",
+    "upwind_fire_intensity",
+    "upwind_fire_count"
+  ],
+  "training_split": {
+    "train": 0.7,
+    "validation": 0.15,
+    "test": 0.15
+  },
+  "git_commit": "23c50f4daec54bcf8d817bb28fb93f114919d04a",
+  "config_hash": "14b63e21fec2b3b35d027a3c49f934c067082375068728a2a9903647e9075098"
+}

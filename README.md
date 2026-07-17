@@ -163,6 +163,36 @@ AtmosEdgeAI/
 
 ---
 
+## 📊 Model Performance & Visualizations
+
+Detailed evaluative reports and diagnostic visualization plots are stored within the [docs/images](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/docs/images) folder:
+
+### 1. Spatiotemporal Performance Map
+Evaluates regional monitoring errors (MAE/RMSE) across geographic stations.
+![Station Performance Map](docs/images/station_performance_map.png)
+
+### 2. Model Baseline Comparison
+Benchmarking MAE metrics between Linear Regression, XGBoost, Random Forest, Persistence, and CNN-LSTM models.
+![Model Comparison Benchmark](docs/images/model_comparison_benchmark.png)
+
+### 3. Actual vs Predicted PM2.5 (Diurnal Trends)
+Chrono-sequenced predictions showing prediction accuracy over time.
+![Actual vs Predicted PM2.5](docs/images/pm25_actual_vs_predicted.png)
+
+### 4. Residual Error Distribution
+Histogram indicating model error skewness and residual concentration bounds.
+![Residual Error Histogram](docs/images/pm25_error_histogram.png)
+
+### 5. XGBoost Feature Importance
+F-score parameters indicating critical weather and lag determinants.
+![XGBoost Feature Importance](docs/images/xgboost_feature_importance.png)
+
+### 6. SHAP Explanations
+Contribution force weights showing top features pushing forecast valuations.
+![SHAP XGBoost Summary](docs/images/shap_xgboost_summary.png)
+
+---
+
 ## ⚙️ Installation
 
 ### Prerequisites

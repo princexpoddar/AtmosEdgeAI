@@ -1,0 +1,9 @@
+{
+  "total_usable_samples": 111786,
+  "training_samples": 78250,
+  "validation_samples": 16767,
+  "testing_samples": 16767,
+  "stations_retained": 40,
+  "stations_discarded": 0,
+  "discarded_reasons": []
+}

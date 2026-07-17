@@ -1,96 +1,120 @@
-# Data Ingestion Analysis and Preprocessing/Model Training Plan
+# Implementation Plan — Real-Time Production AI Transition
 
-This document outlines a complete check of the data currently available in the project, an evaluation of its sufficiency, and a detailed implementation plan to design features, clean the datasets, and train the advanced forecasting and attribution models matching the project's PDF architecture.
-
----
-
-## 📊 Data Sufficiency & Volume Check
-
-We verified the database and satellite fire files. We have substantial, high-quality data spanning the exact same **2-year window (July 15, 2024 – July 15, 2026)**:
-
-| Dataset | Volume / Record Count | Coverage Period | Spatial Boundaries |
-| :--- | :--- | :--- | :--- |
-| **Meteorological Data** (Open-Meteo ERA5) | **175,440** hourly rows | 2024-07-15 to 2026-07-15 | All 10 wards in Delhi & Bengaluru |
-| **Ground Air Quality** (OpenAQ Local) | **46,861** ground readings | 2024-01-01 to 2026-07-11 | Bengaluru (`8180`, `8161`, `8185`, `8160`) |
-| **Ground Air Quality** (Pusa IMD Delhi) | **70,177** ground readings | 2024-01-01 to 2025-12-31 | Delhi NCR (`site_107` Pusa) |
-| **NASA FIRMS MODIS** (M-C61 Standard + NRT) | **183,695** fire detections | 2024-07-15 to 2026-07-15 | India-wide ($8^\circ\text{N}$ to $34.7^\circ\text{N}$) |
-| **NASA FIRMS VIIRS** (SV-C2 Standard + NRT) | **1,267,715** fire detections | 2024-07-16 to 2026-07-10 | India-wide ($8^\circ\text{N}$ to $34.7^\circ\text{N}$) |
-
-### Sufficiency Verdict
-> [!TIP]
-> **The dataset is highly sufficient.** The spatial overlap covers all of India (specifically targeting the coordinates of Delhi and Bengaluru), and the temporal overlap gives us 2 full years of continuous meteorological, satellite-fire, and ground-level measurements. This is perfect for training robust seasonal models and predicting spatial-temporal pollution transport.
+AtmosEdgeAI is transitioning from an offline research prototype into a production-grade, real-time AI forecasting platform. This implementation plan outlines the steps to build a robust real-time ingestion layer, unify the forecasting engine around the deployed Linear Regression baseline model, and refactor the Vite-React frontend into a professional modular structure.
 
 ---
 
-## 🛠️ Proposed Preprocessing & Feature Engineering
+## User Review Required
 
-### 1. NASA FIRMS Data Cleaning and Indexing
-* **Confidence Filtering**: 
-  * For **VIIRS**: Exclude low confidence (`confidence == 'l'`). Retain only nominal (`n`) and high (`h`) confidence points.
-  * For **MODIS**: Retain entries with `confidence >= 50`.
-* **Spatial Partitioning**:
-  * Set a spatial search radius of **600 km** around Delhi (capturing crop fires/stubble burning in Punjab/Haryana) and **150 km** around Bengaluru.
-* **Upwind Fire Transport Index (UFTI)**:
-  * For each hour, compute a dynamic index representing active fires upwind of each ward:
-    $$\text{UFTI} = \sum_{\text{fire } i} \frac{\text{FRP}_i}{\text{Distance}_i^2} \times \cos(\Delta\theta_i)^2$$
-    Where $\text{FRP}_i$ is Fire Radiative Power (intensity), $\text{Distance}_i$ is distance to ward, and $\Delta\theta_i$ is the angular difference between the current wind direction and the bearing from the ward to the fire (active only when the fire is upwind: $\Delta\theta_i < 90^\circ$).
-
-### 2. Air Quality Mapping & Alignment
-* **Bengaluru Wards**: Integrated Ground PM2.5 measurements from local OpenAQ files.
-* **Delhi NCR Wards**: Integrate Pusa IMD Delhi Ground Dataset (aggregated to hourly intervals) and use the weather-diurnal proxy model only to fill the remaining 2026 months where ground data is missing, creating a highly realistic 2-year hybrid record.
-* **Lag Features**: Create lagged inputs for the deep learning models (e.g., $t-1$, $t-2$, $t-24$ hour readings) to provide memory of recent trends.
+> [!IMPORTANT]
+> The original PyTorch CNN-LSTM global forecaster will no longer be used for server-side forecasts in the dashboard. Instead, both the **Interactive Predictor** and the **Dashboard Views** will be unified to use the **same Linear Regression baseline model** (`baseline_lr.pkl`), which runs on-the-fly from live data.
+> The historical parquet datasets will be kept strictly read-only for analytics, SHAP visualization, and model retraining purposes.
 
 ---
 
-## 🤖 Proposed Changes & Architectural Enhancements
+## Proposed Changes
 
-We will implement a deep spatiotemporal neural network matching the CNN-LSTM architecture described in the project PDF, expand database columns, and refactor the attribution calculations.
+### Component 1: Unified Forecasting Engine [NEW]
 
-### Ingestion Layer
+We will create a unified forecasting service inside `backend/app/services/forecasting/`. This service will load the deployed model (`baseline_lr.pkl`) and global scaler (`global_scaler.pkl`) **once at startup** and host preprocessing, feature engineering, and inference tasks.
 
-#### [MODIFY] [requirements.txt](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/requirements.txt)
-* Add `torch` (PyTorch) to the python package dependencies list.
+#### [NEW] [inference.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/inference.py)
+* Loads `baseline_lr.pkl` and `global_scaler.pkl` at module initialization.
+* Handles inference calls. Expects a sequence of the last 24 hours of 41-dimensional features and the static variables of the target station.
+* Computes forecast outputs (PM2.5 and NO₂ concentrations) for 24h, 48h, and 72h horizons.
 
-#### [MODIFY] [database.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/core/database.py)
-* Add `predicted_no2 = Column(Float)` to the SQLite `Forecast` model.
+#### [NEW] [feature_engineering.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/feature_engineering.py)
+* Houses the feature construction pipeline:
+  * Computes cyclic sine/cosine hour & day-of-year encodings.
+  * Calculates seasons, rolling averages, rolling standard deviations (6h, 12h, 24h windows), and lag vectors (t-1, t-2, t-3, t-24).
+  * Computes the NASA FIRMS upwind transport index using fire intensities and wind vectors.
 
-### Data Layer
+#### [NEW] [preprocessing.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/preprocessing.py)
+* Normalizes incoming temporal records column-wise using the loaded global scaler `scaler_X`.
+* Normalizes static features (latitude, longitude, city_encoded) using `scaler_static`.
+* Restores predicted values back to original space using `scaler_y`.
 
-#### [NEW] [firms_processor.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/firms_processor.py)
-* Parse the raw FIRMS csv datasets, perform confidence and spatial bounds filtering, and expose an efficient lookup for hourly upwind fire statistics (cumulative counts, total FRP, and bearing).
+---
 
-### Services Layer
+### Component 2: Real-Time Ingestion Layer [NEW]
 
-#### [MODIFY] [forecaster.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecaster.py)
-* Replace `RandomForestRegressor` with a PyTorch **CNN-LSTM spatiotemporal model** (`CNNLSTMForecaster`):
-  * **Input Features**: `[pm25_now, pm25_lag_1, pm25_lag_24, target_temp, target_humidity, target_wind_speed, target_stagnation, upwind_fire_intensity, hour, dayofweek]`
-  * **Architecture**: 
-    1. `Conv1d` layer (extracts local temporal patterns from sliding window of past 24 hours).
-    2. `LSTM` layer (models sequence time-dependency).
-    3. `Linear` fully connected head outputs.
-  * **Targets (Outputs)**: Multi-horizon predictions (24h, 48h, and 72h lead times) for both `PM2.5` and `NO2`.
-  * **AQI Mapping**: Compute overall CPCB AQI based on the predicted pollutant levels.
+We will establish a dedicated real-time data ingestion layer in `backend/app/services/ingestion/` to isolate external provider calls, handle validation, implement caching, and log failures.
 
-#### [MODIFY] [attribution.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/attribution.py)
-* Replace the hardcoded `season_factor` for biomass burning with a real-time computation using the active `Upwind Fire Transport Index (UFTI)`. This will dynamically attribute high PM2.5 to crop fires during intensive stubble burning events and vehicular/industrial sources during clean periods.
+```mermaid
+flowchart TD
+    subgraph Realtime Ingestion Layer
+        cpcb[cpcb.py] --> norm[Normalizer / Validator]
+        meteo[openmeteo.py] --> norm
+        firms[firms.py] --> norm
+    end
+    norm --> sqlite[(geobreathe.db sqlite)]
+```
 
-### API Layer
+#### [NEW] [cpcb.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/cpcb.py)
+* Ingests latest air quality metrics for the 36 metropolitan stations.
+* Implements retry logic and fallbacks if CPCB endpoints are slow or offline.
+
+#### [NEW] [openmeteo.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/openmeteo.py)
+* Ingests live weather forecasts and current conditions (temperature, humidity, wind vectors).
+
+#### [NEW] [firms.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/firms.py)
+* Ingests live MODIS/VIIRS fire coordinates. Uses regional local CSV databases as high-speed caches for offline execution.
+
+#### [NEW] [scheduler.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/scheduler.py)
+* Runs a cron task every hour to:
+  * Query the live CPCB and weather metrics.
+  * Validate and normalize readings.
+  * Store the observations directly inside `geobreathe.db`.
+
+#### [NEW] [cache.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/cache.py)
+* Maintains a rolling cache of the last 72 hours of observations per station.
+* Cleans and marks invalid or missing observations cleanly (rather than defaulting to fake averages).
+
+---
+
+### Component 3: Backend API Restructuring [MODIFY]
 
 #### [MODIFY] [endpoints.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/api/endpoints.py)
-* Update the `/forecast` endpoint serialization to include `"predicted_no2": f.predicted_no2` in the response payload.
+* Refactors `POST /api/predict` to require ONLY `"station_id"` and `"forecast_horizon"`. 
+* The route will:
+  1. Retrieve the last 24-hour observation sequence from the SQLite database.
+  2. If the database has insufficient observations (<24 hours of data), return an **HTTP 422** error response.
+  3. Otherwise, pass the sequence to the forecasting inference pipeline, apply scaling, predict the target concentrations, and return the forecast.
+* Refactors `/stations/{id}/forecast` to execute the exact same Linear Regression inference pipeline instead of seasonal perturbation formulas.
 
 ---
 
-## 🧪 Verification Plan
+### Component 4: Frontend Refactoring & Cleanup [MODIFY]
+
+We will refactor the frontend codebase into a structured directories layout to separate concerns and clean up all dead code:
+
+```
+src/
+  ├── components/
+  │     ├── cards/          # Metrics and forecast cards
+  │     ├── charts/         # SVG trends and heatmaps
+  │     ├── layout/         # Header and drawer overlays
+  │     ├── map/            # Leaflet dynamic map
+  │     └── common/         # Alert banners
+  ├── pages/
+  │     ├── Dashboard.jsx   # Live dashboard
+  │     ├── Predictor.jsx   # Real-time predictor form
+  │     └── Landing.jsx     # Product homepage
+  ├── services/
+  │     └── api.js          # Unified axios/fetch clients
+  ├── App.jsx               # Main state routing
+  └── index.css             # Base styles
+```
+
+---
+
+## Verification Plan
 
 ### Automated Tests
-* We will write a validation script to train models and test forecasting accuracy:
-  ```powershell
-  $env:PYTHONPATH="c:\Users\praba\OneDrive\Desktop\AtmosEdgeAI"; .\venv\Scripts\python.exe backend/app/tests/verify_pipeline.py
-  ```
-* Output the **Root Mean Squared Error (RMSE)** and **R-squared ($R^2$)** metrics for 24h, 48h, and 72h predictions to confirm the accuracy improvement after incorporating FIRMS data and PyTorch CNN-LSTM modeling.
+* Run api verify tests to hit `POST /api/predict` with only `station_id` and check that it pulls DB sequences, computes inference, and returns 200 OK.
+* Verify `POST /api/predict` returns HTTP 422 when hitting an invalid station or a station with insufficient records.
+* Build the frontend client to verify clean compile states.
 
 ### Manual Verification
-* Run the backend and verify on the frontend dashboard that:
-  1. The spatiotemporal maps show actual hotspot attribution.
-  2. The forecast graphs reflect changes corresponding to simulated wind vectors and fire events.
+* Validate map tiles swap correctly under Light/Dark themes.
+* Verify the live status card displaying the data source ("Live", "Cached", "Historical") depending on database timestamps.
