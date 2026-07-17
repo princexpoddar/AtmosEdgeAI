@@ -1,17 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 
-const API_BASE = "http://127.0.0.1:8001/api";
+// Import modular pages & services
+import LandingPage from "./pages/LandingPage";
+import Predictor from "./pages/Predictor";
+import { getStations, getMonitoring, getStationHistory, getStationForecast, syncCPCB } from "./services/api";
 
-/* ── AQI helpers ──────────────────────────────────────────────────────── */
-function aqiClass(aqi) {
-  if (aqi <= 50)  return "aqi-good";
-  if (aqi <= 100) return "aqi-satisfactory";
-  if (aqi <= 200) return "aqi-moderate";
-  if (aqi <= 300) return "aqi-poor";
-  if (aqi <= 400) return "aqi-very-poor";
-  return "aqi-severe";
-}
+// Import components
+import Map from "./components/map/Map";
+import Analytics from "./components/charts/Analytics";
+import Explainability from "./components/charts/Explainability";
+import Comparison from "./components/cards/Comparison";
 
 function aqiSlug(aqi) {
   if (aqi <= 50)  return "good";
@@ -22,431 +21,459 @@ function aqiSlug(aqi) {
   return "severe";
 }
 
-// AQI → 0–100% progress for category bar (buckets: 0-50, 50-100, 100-200, 200-300, 300-400, 400-500)
-function aqiBarPct(aqi) {
-  const stops = [0, 50, 100, 200, 300, 400, 500];
-  const capped = Math.min(aqi, 500);
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (capped <= stops[i + 1]) {
-      const segPct = (capped - stops[i]) / (stops[i + 1] - stops[i]);
-      return ((i + segPct) / (stops.length - 1)) * 100;
-    }
-  }
-  return 100;
-}
-
-function aqiLabel(aqi) {
-  if (aqi <= 50)  return "Good";
-  if (aqi <= 100) return "Satisfactory";
-  if (aqi <= 200) return "Moderate";
-  if (aqi <= 300) return "Poor";
-  if (aqi <= 400) return "Very Poor";
-  return "Severe";
-}
-
-function advClass(level) {
-  const map = {
-    Good: "adv-good", Satisfactory: "adv-satisfactory",
-    Moderate: "adv-moderate", Poor: "adv-poor",
-    "Very Poor": "adv-very-poor", Severe: "adv-severe",
-  };
-  return map[level] || "adv-moderate";
-}
-
 function fmt(val, decimals = 1) {
-  return val != null ? Number(val).toFixed(decimals) : "—";
+  if (val === null || val === undefined) return "N/A";
+  return typeof val === "number" ? val.toFixed(decimals) : val;
 }
-
-/* ── Attribution source config ────────────────────────────────────────── */
-const ATTR_SOURCES = [
-  { key: "vehicular",     label: "Vehicular",        color: "#bc8cff" },
-  { key: "industrial",    label: "Industrial",       color: "#388bfd" },
-  { key: "biomass",       label: "Biomass / Fires",  color: "#db6d28" },
-  { key: "waste_burning", label: "Waste Burning",    color: "#f85149" },
-  { key: "dust",          label: "Dust",             color: "#d29922" },
-];
 
 export default function App() {
-  /* ── state ── */
-  const [cities, setCities]           = useState([]);
-  const [selectedCityId, setCity]     = useState("");
-  const [wards, setWards]             = useState([]);
-  const [selectedWardId, setWard]     = useState("");
-  const [realtime, setRealtime]       = useState(null);
-  const [forecasts, setForecasts]     = useState([]);
-  const [attribution, setAttribution] = useState(null);
-  const [advisory, setAdvisory]       = useState(null);
-  const [enforcements, setEnforcements] = useState([]);
-  const [geminiKey, setGeminiKey]     = useState(() => localStorage.getItem("gk") || "");
-  const [chatHistory, setChat]        = useState([
-    { from: "bot", text: "Hello — I'm your AtmosEdgeAI health assistant. Ask me about mask usage, outdoor activity, or current air quality." },
-  ]);
-  const [chatInput, setChatInput]     = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [loading, setLoading]         = useState(false);
-  const [syncing, setSyncing]         = useState(false);
-  const [error, setError]             = useState(null);
-  const [syncOk, setSyncOk]           = useState(false);
-  const chatEndRef = useRef(null);
+  const [viewMode, setViewMode] = useState("landing"); // "landing" | "dashboard" | "predictor"
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+  const [dashboardTab, setDashboardTab] = useState("forecast");
+  const [activeMapLayer, setActiveMapLayer] = useState("aqi");
 
-  /* ── fetch cities ── */
+  // Core Data
+  const [stations, setStations] = useState([]);
+  const [selectedStationId, setSelectedStationId] = useState("");
+  const [stationHistory, setStationHistory] = useState([]);
+  const [stationForecasts, setStationForecasts] = useState([]);
+  const [monitoring, setMonitoring] = useState(null);
+  
+  // Refresh & Ingestion state
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [countdown, setCountdown] = useState(300);
+  const [syncing, setSyncing] = useState(false);
+  const [syncOk, setSyncOk] = useState(false);
+
+  // Alerts & Warnings
+  const [alerts, setAlerts] = useState([]);
+  const [showAlertPanel, setShowAlertPanel] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Toggle Theme
   useEffect(() => {
-    fetch(`${API_BASE}/cities`)
-      .then(r => r.json())
-      .then(d => { setCities(d); if (d.length) setCity(d[0].id); })
-      .catch(() => setError("Cannot reach backend. Is the server running on port 8001?"));
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  // Request notifications
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
   }, []);
 
-  /* ── fetch wards + enforcements when city changes ── */
-  useEffect(() => {
-    if (!selectedCityId) return;
-    fetch(`${API_BASE}/wards?city_id=${selectedCityId}`)
-      .then(r => r.json())
-      .then(d => { setWards(d); if (d.length) setWard(d[0].id); })
-      .catch(() => {});
-    fetch(`${API_BASE}/enforcement?city_id=${selectedCityId}`)
-      .then(r => r.json())
-      .then(setEnforcements)
-      .catch(() => {});
-  }, [selectedCityId]);
-
-  /* ── fetch ward data ── */
-  useEffect(() => {
-    if (!selectedWardId) return;
-    setLoading(true);
-    Promise.all([
-      fetch(`${API_BASE}/aqi/realtime?city_id=${selectedCityId}`).then(r => r.json()),
-      fetch(`${API_BASE}/forecast?ward_id=${selectedWardId}`).then(r => r.json()),
-      fetch(`${API_BASE}/attribution?ward_id=${selectedWardId}`).then(r => r.json()),
-      fetch(`${API_BASE}/advisory?ward_id=${selectedWardId}`).then(r => r.json()),
-    ]).then(([rtList, fc, attr, adv]) => {
-      setRealtime(rtList.find(x => x.ward_id === Number(selectedWardId)) || null);
-      setForecasts(fc);
-      setAttribution(attr);
-      setAdvisory(adv);
-      setError(null);
-    }).catch(() => setError("Failed to load ward data."))
-      .finally(() => setLoading(false));
-  }, [selectedWardId, selectedCityId]);
-
-  /* ── scroll chat ── */
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory]);
-
-  /* ── save gemini key ── */
-  const onGeminiKey = e => {
-    setGeminiKey(e.target.value);
-    localStorage.setItem("gk", e.target.value);
-  };
-
-  /* ── sync ── */
-  const handleSync = async () => {
-    setSyncing(true); setError(null); setSyncOk(false);
-    try {
-      const r = await fetch(`${API_BASE}/aqi/sync`, { method: "POST" });
-      if (r.ok) { setSyncOk(true); setTimeout(() => { setSyncOk(false); window.location.reload(); }, 2200); }
-      else setError("Sync failed — check backend logs.");
-    } catch { setError("Cannot reach sync endpoint."); }
-    finally { setSyncing(false); }
-  };
-
-  /* ── chat ── */
-  const handleChat = async e => {
-    e.preventDefault();
-    if (!chatInput.trim() || !selectedWardId) return;
-    const q = chatInput;
-    setChat(h => [...h, { from: "user", text: q }]);
-    setChatInput(""); setChatLoading(true);
-    try {
-      const r = await fetch(`${API_BASE}/advisory/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, ward_id: Number(selectedWardId), gemini_api_key: geminiKey || null }),
+  // Fetch initial telemetry & stations
+  const loadData = () => {
+    return Promise.all([getStations(), getMonitoring()])
+      .then(([stList, monitor]) => {
+        setStations(stList);
+        setMonitoring(monitor);
+        setLastUpdated(new Date().toLocaleTimeString());
+        setCountdown(300);
+        setError(null);
+        return stList;
+      })
+      .catch(() => {
+        setError("Database server offline. Using locally cached datasets.");
       });
-      const d = await r.json();
-      setChat(h => [...h, { from: "bot", text: d.response }]);
-    } catch {
-      setChat(h => [...h, { from: "bot", text: "Sorry, I couldn't reach the server." }]);
-    } finally { setChatLoading(false); }
   };
 
-  /* ── inspect enforcement ── */
-  const handleInspect = async id => {
-    await fetch(`${API_BASE}/enforcement/inspect/${id}?status=Inspected`, { method: "POST" });
-    setEnforcements(p => p.map(x => x.id === id ? { ...x, status: "Inspected" } : x));
+  useEffect(() => {
+    setLoading(true);
+    loadData()
+      .then((stList) => {
+        if (stList && stList.length) setSelectedStationId(stList[0].id);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Count down loop
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          loadData().catch(() => {});
+          return 300;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch individual station details when selection changes
+  useEffect(() => {
+    if (!selectedStationId) return;
+    Promise.all([
+      getStationHistory(selectedStationId, 3),
+      getStationForecast(selectedStationId)
+    ]).then(([hist, fc]) => {
+      setStationHistory(hist);
+      setStationForecasts(fc);
+      
+      const maxFc = Math.max(...fc.map(x => x.predicted_aqi), 0);
+      const newAlerts = [];
+      if (maxFc > 200) {
+        newAlerts.push({
+          title: "High Pollution Alert!",
+          desc: `Forecast peaks at ${maxFc.toFixed(0)} AQI. Stay indoors and use air filters.`,
+          type: "danger"
+        });
+      } else if (maxFc > 100) {
+        newAlerts.push({
+          title: "Moderate Exposure Advisory",
+          desc: `AQI forecast reaches ${maxFc.toFixed(0)}. Close windows if sensitive.`,
+          type: "warning"
+        });
+      } else {
+        newAlerts.push({
+          title: "Clean Air Forecasted",
+          desc: "Low pollution levels predicted for the next 72 hours.",
+          type: "success"
+        });
+      }
+      setAlerts(newAlerts);
+    }).catch(() => {});
+  }, [selectedStationId]);
+
+  // Ingestion database sync
+  const handleSync = async () => {
+    setSyncing(true);
+    setError(null);
+    setSyncOk(false);
+    try {
+      await syncCPCB();
+      setSyncOk(true);
+      setTimeout(() => {
+        setSyncOk(false);
+        loadData().catch(() => {});
+      }, 2000);
+    } catch (err) {
+      setError(err.message || "Failed to trigger live update.");
+    } finally {
+      setSyncing(false);
+    }
   };
 
-  const aqi   = realtime?.aqi ?? null;
-  const wardName = wards.find(w => w.id === Number(selectedWardId))?.name ?? "";
+  const selectedStation = stations.find(s => s.id === selectedStationId);
+
+  // Determine current data source depending on quality flags
+  const getDataSourceText = () => {
+    if (!selectedStation) return "Historical Data";
+    if (selectedStation.pm25 === 0.0) return "Cached (Offline Fallback)";
+    return "Live Observation API";
+  };
 
   return (
     <div className="app-root">
-
-      {/* ── Topbar ── */}
+      
+      {/* ── Navbar ── */}
       <header className="topbar">
-        <div className="topbar-brand">
+        <div className="topbar-brand" onClick={() => setViewMode("landing")} style={{ cursor: "pointer" }}>
           <div className="brand-icon">🌬</div>
           <span className="brand-name">AtmosEdgeAI</span>
-          <span className="brand-version">v1.1</span>
+          <span className="brand-version">v2.1</span>
         </div>
 
-        <span className="topbar-subtitle">
-          Spatiotemporal Deep Learning · Air Quality Forecast &amp; Attribution Engine
-        </span>
+        {viewMode !== "landing" && (
+          <div style={{ display: "flex", gap: "16px", marginLeft: "20px" }}>
+            <span 
+              onClick={() => setViewMode("dashboard")} 
+              style={{ fontSize: "13px", fontWeight: "600", cursor: "pointer", color: viewMode === "dashboard" ? "#3b82f6" : "var(--text-2)" }}
+            >
+              Dashboard
+            </span>
+            <span 
+              onClick={() => setViewMode("predictor")} 
+              style={{ fontSize: "13px", fontWeight: "600", cursor: "pointer", color: viewMode === "predictor" ? "#3b82f6" : "var(--text-2)" }}
+            >
+              Predictor
+            </span>
+          </div>
+        )}
 
         <div className="topbar-actions">
-          <div className="gemini-field">
-            <label>Gemini Key</label>
-            <input type="password" value={geminiKey} onChange={onGeminiKey} placeholder="Paste API key…" />
-          </div>
-          <button className="btn btn-secondary" onClick={handleSync} disabled={syncing}>
-            {syncing ? "Syncing…" : "↻ Sync"}
+          {/* Database Ingest sync trigger */}
+          <button 
+            className="btn btn-secondary" 
+            onClick={handleSync}
+            disabled={syncing}
+            style={{ fontSize: "11px", height: "30px", borderRadius: "15px", display: "flex", gap: "6px", alignItems: "center" }}
+          >
+            <i className={`fa fa-arrows-rotate ${syncing ? "fa-spin" : ""}`}></i>
+            <span>{syncing ? "Syncing..." : "Sync APIs"}</span>
+          </button>
+
+          {/* Refresh Countdown */}
+          {lastUpdated && (
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--text-3)", marginRight: "10px" }}>
+              <span className="live-pulse"></span>
+              <span>Updated {lastUpdated} (refresh {countdown}s)</span>
+            </div>
+          )}
+
+          {/* Alert Center Trigger */}
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setShowAlertPanel(!showAlertPanel)}
+            style={{ width: "32px", height: "32px", padding: 0, justifyContent: "center", position: "relative" }}
+          >
+            <i className="fa fa-bell" style={{ fontSize: "12px" }}></i>
+            {alerts.length > 0 && <span className="alert-badge"></span>}
+          </button>
+
+          {/* Theme Toggle */}
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            style={{ width: "32px", height: "32px", padding: 0, justifyContent: "center" }}
+          >
+            <i className={`fa ${theme === "dark" ? "fa-sun" : "fa-moon"}`} style={{ fontSize: "12px" }}></i>
           </button>
         </div>
       </header>
 
-      {error   && <div className="banner banner-error">⚠ {error}</div>}
-      {syncOk  && <div className="banner banner-success">✓ Live data synced — refreshing…</div>}
-
-      {/* ── Main grid ── */}
-      <div className="main-content">
-
-        {/* ── Left sidebar ── */}
-        <aside className="sidebar">
-
-          {/* Location selectors */}
-          <div className="sidebar-section">
-            <div className="sidebar-label">Location</div>
-            <div className="field">
-              <span className="field-label">City</span>
-              <select className="select-control" value={selectedCityId} onChange={e => setCity(e.target.value)}>
-                {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+      {/* Alert Overlay Drawer */}
+      {showAlertPanel && (
+        <div className="alert-drawer">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <h4 style={{ margin: 0, fontSize: "13.5px", fontWeight: "bold" }}>Alerts & Advisories</h4>
+            <i className="fa fa-times" style={{ cursor: "pointer" }} onClick={() => setShowAlertPanel(false)}></i>
+          </div>
+          {alerts.map((al, idx) => (
+            <div key={idx} className={`alert-item ${al.type}`} style={{ padding: "10px 12px", borderRadius: "6px", fontSize: "11.5px", marginBottom: "8px" }}>
+              <strong>{al.title}</strong>
+              <p style={{ margin: "4px 0 0 0", color: "var(--text-2)", lineHeight: "1.4" }}>{al.desc}</p>
             </div>
-            <div className="field">
-              <span className="field-label">Ward</span>
-              <select className="select-control" value={selectedWardId} onChange={e => setWard(e.target.value)}>
-                {wards.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+          ))}
+        </div>
+      )}
+
+      {error  && <div className="banner banner-error">⚠ {error}</div>}
+      {syncOk && <div className="banner banner-success">✓ Updated CPCB live measurements. Refreshing...</div>}
+
+      {/* ── View Routing ── */}
+      {viewMode === "landing" ? (
+        <LandingPage 
+          stations={stations} 
+          onEnterApp={(mode) => setViewMode(mode)} 
+        />
+      ) : viewMode === "predictor" ? (
+        <div style={{ padding: "40px 20px" }}>
+          <Predictor stations={stations} />
+        </div>
+      ) : (
+        /* ── Full Dashboard View ── */
+        <div className="main-content" style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr", gap: "20px", padding: "20px", flex: 1 }}>
+          
+          {/* Map Column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            
+            {/* Interactive Leaflet Map */}
+            <div className="card" style={{ flex: 1.2, minHeight: "440px", overflow: "hidden", position: "relative" }}>
+              <div style={{ position: "absolute", top: "15px", right: "15px", zIndex: 1000, display: "flex", gap: "6px" }}>
+                {[
+                  { key: "aqi", label: "AQI" },
+                  { key: "weather", label: "Temp" },
+                  { key: "wind", label: "Wind" }
+                ].map(layer => (
+                  <button
+                    key={layer.key}
+                    onClick={() => setActiveMapLayer(layer.key)}
+                    style={{
+                      height: "26px",
+                      padding: "0 10px",
+                      borderRadius: "13px",
+                      fontSize: "10.5px",
+                      fontWeight: "bold",
+                      border: "1px solid var(--border)",
+                      background: activeMapLayer === layer.key ? "#3b82f6" : "var(--bg-3)",
+                      color: "#fff",
+                      cursor: "pointer",
+                      boxShadow: "var(--shadow-sm)"
+                    }}
+                  >
+                    {layer.label}
+                  </button>
+                ))}
+              </div>
+              <Map
+                stations={stations}
+                selectedStationId={selectedStationId}
+                onSelectStation={(id) => setSelectedStationId(id)}
+                theme={theme}
+                activeLayer={activeMapLayer}
+              />
             </div>
+
+            {/* List directory of stations */}
+            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", padding: "16px" }}>
+              <h3 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "bold" }}>CPCB Station Directory</h3>
+              <div style={{ flex: 1, overflowY: "auto", maxHeight: "250px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                {stations.map(st => {
+                  const isSelected = st.id === selectedStationId;
+                  const slug = aqiSlug(st.aqi);
+                  return (
+                    <div
+                      key={st.id}
+                      onClick={() => setSelectedStationId(st.id)}
+                      className={`station-list-row ${isSelected ? "active" : ""}`}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background: isSelected ? "rgba(59, 130, 246, 0.12)" : "var(--bg-3)",
+                        border: isSelected ? "1px solid #3b82f6" : "1px solid var(--border)",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span style={{ fontSize: "12.5px", fontWeight: isSelected ? "bold" : "500", color: isSelected ? "#3b82f6" : "var(--text-1)" }}>{st.name}</span>
+                        <span style={{ fontSize: "10px", color: "var(--text-3)" }}>{st.city}, {st.state}</span>
+                      </div>
+                      <span className={`aqi-indicator-pill ${slug}`}>{st.aqi.toFixed(0)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
           </div>
 
-          {/* AQI ring */}
-          {realtime && (
-            <div className="aqi-hero">
-              <div className={`aqi-ring ${aqiClass(aqi)}`}>
-                <span className="aqi-ring-value">{fmt(aqi, 0)}</span>
-                <span className="aqi-ring-unit">AQI</span>
-              </div>
-              <span className={`aqi-category`} style={{ color: "var(--text-1)" }}>{aqiLabel(aqi)}</span>
-              <span className="aqi-ward">{wardName}</span>
-              <span className="aqi-time">
-                {new Date(realtime.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </div>
-          )}
-
-          {/* Metrics grid */}
-          {realtime && (
-            <div className="metric-grid">
-              {[
-                { label: "PM2.5", value: fmt(realtime.pm25), unit: "µg/m³" },
-                { label: "NO₂",   value: fmt(realtime.no2),  unit: "µg/m³" },
-                { label: "SO₂",   value: fmt(realtime.so2),  unit: "µg/m³" },
-                { label: "O₃",    value: fmt(realtime.o3),   unit: "µg/m³" },
-                { label: "Wind",  value: fmt(realtime.wind_speed), unit: "km/h" },
-                { label: "Temp",  value: fmt(realtime.temp), unit: "°C" },
-                { label: "Humid", value: fmt(realtime.humidity), unit: "%" },
-                { label: "Stag", value: fmt(realtime.stagnation, 2), unit: "0–1" },
-              ].map(m => (
-                <div className="metric-cell" key={m.label}>
-                  <span className="metric-cell-label">{m.label}</span>
-                  <span className="metric-cell-value">
-                    {m.value} <span className="metric-cell-unit">{m.unit}</span>
-                  </span>
+          {/* Right Metrics & Analytics column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            
+            {/* Header info */}
+            {selectedStation && (
+              <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "17px", fontWeight: "bold" }}>{selectedStation.name}</h2>
+                  <span style={{ fontSize: "11px", color: "var(--text-3)" }}>Source: <strong style={{ color: "#3b82f6" }}>{getDataSourceText()}</strong></span>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Advisory */}
-          {advisory && advisory.level && (
-            <div className="advisory-block">
-              <div className="sidebar-label">Health Advisory</div>
-              <span className={`advisory-tag ${advClass(advisory.level)}`}>
-                {advisory.level}
-              </span>
-              <p className="advisory-text">{advisory.message_en}</p>
-              <p className="advisory-text-hi">{advisory.message_hi}</p>
-            </div>
-          )}
-        </aside>
-
-        {/* ── Center panel ── */}
-        <main className="center-panel">
-
-          {/* Forecast section */}
-          <div className="panel-section">
-            <div className="section-header">
-              <span className="section-title">CNN-LSTM Forecast Horizon</span>
-              <span className="section-meta">24h · 48h · 72h prediction windows</span>
-            </div>
-            <div className="forecast-row">
-              {forecasts.length > 0 ? forecasts.map((fc, i) => {
-                const hrs  = Math.round((new Date(fc.forecast_time) - new Date()) / 3600000);
-                const slug = aqiSlug(fc.predicted_aqi);
-                const pct  = aqiBarPct(fc.predicted_aqi);
-                const fcDate = new Date(fc.forecast_time);
-                return (
-                  <div className="forecast-card" key={i}>
-                    <div className={`forecast-strip strip-${slug}`} />
-                    <div className="forecast-aqi-block">
-                      <span className={`forecast-aqi-num aqitxt-${slug}`}>{fmt(fc.predicted_aqi, 0)}</span>
-                      <span className="forecast-aqi-unit">AQI</span>
-                      <span className={`forecast-aqi-cat aqitxt-${slug}`}>{aqiLabel(fc.predicted_aqi)}</span>
-                    </div>
-                    <div className="forecast-body">
-                      <div className="forecast-header">
-                        <span className="forecast-horizon-pill">+{hrs}h</span>
-                        <span className="forecast-datetime">
-                          {fcDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
-                          &nbsp;·&nbsp;
-                          {fcDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                      <div className="forecast-chips">
-                        <div className="forecast-chip">
-                          <span className="forecast-chip-label">PM2.5</span>
-                          <span className="forecast-chip-val">{fmt(fc.predicted_pm25)} <span className="forecast-chip-unit">µg/m³</span></span>
-                        </div>
-                        <div className="forecast-chip-divider" />
-                        <div className="forecast-chip">
-                          <span className="forecast-chip-label">NO₂</span>
-                          <span className="forecast-chip-val">{fmt(fc.predicted_no2)} <span className="forecast-chip-unit">µg/m³</span></span>
-                        </div>
-                      </div>
-                      <div className="forecast-catbar-track">
-                        <div className={`forecast-catbar-fill catbar-${slug}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              }) : <p className="empty-state">No forecast data available.</p>}
-            </div>
-          </div>
-
-          {/* Attribution section */}
-          {attribution && (
-            <div className="panel-section">
-              <div className="section-header">
-                <span className="section-title">PM2.5 Source Attribution</span>
-                <div className="confidence-row">
-                  <div className="confidence-dot"></div>
-                  <span>Model confidence {fmt(attribution.confidence * 100, 0)}%</span>
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ fontSize: "22px", fontWeight: "bold", color: "#3b82f6" }}>{selectedStation.aqi.toFixed(0)}</span>
+                  <span style={{ fontSize: "10px", color: "var(--text-3)", display: "block" }}>AQI</span>
                 </div>
               </div>
-              <div className="attribution-list">
-                {ATTR_SOURCES.map(s => (
-                  <div className="attr-row" key={s.key}>
-                    <div className="attr-row-header">
-                      <span className="attr-name">{s.label}</span>
-                      <span className="attr-pct">{fmt(attribution[s.key], 1)}%</span>
-                    </div>
-                    <div className="attr-track">
-                      <div className="attr-fill" style={{ width: `${attribution[s.key]}%`, background: s.color }} />
-                    </div>
+            )}
+
+            {/* Metrics cards row */}
+            {selectedStation && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px" }}>
+                {[
+                  { l: "PM2.5", v: selectedStation.pm25, u: "µg/m³" },
+                  { l: "NO₂", v: selectedStation.no2, u: "µg/m³" },
+                  { l: "Temp", v: selectedStation.temp, u: "°C" },
+                  { l: "Humid", v: selectedStation.humidity, u: "%" },
+                  { l: "Wind", v: selectedStation.wind_speed, u: "km/h" }
+                ].map((m, idx) => (
+                  <div key={idx} className="card" style={{ padding: "10px", display: "flex", flexDirection: "column", gap: "3px", textAlign: "center" }}>
+                    <span style={{ fontSize: "10px", color: "var(--text-3)" }}>{m.l}</span>
+                    <strong style={{ fontSize: "14.5px" }}>{fmt(m.v)} <span style={{ fontSize: "9px", color: "var(--text-3)" }}>{m.u}</span></strong>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-        </main>
+            {/* Dashboard Sub-tabs */}
+            <div className="card" style={{ flex: 1, padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", gap: "14px", borderBottom: "1px solid var(--border)", paddingBottom: "10px" }}>
+                {[
+                  { key: "forecast", label: "Model Predictions" },
+                  { key: "analytics", label: "Historical Records" },
+                  { key: "shap", label: "SHAP Explainability" },
+                  { key: "comparison", label: "Compare Stations" }
+                ].map(tab => (
+                  <span
+                    key={tab.key}
+                    onClick={() => setDashboardTab(tab.key)}
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      paddingBottom: "8px",
+                      borderBottom: dashboardTab === tab.key ? "2px solid #3b82f6" : "2px solid transparent",
+                      color: dashboardTab === tab.key ? "var(--text-1)" : "var(--text-3)",
+                      transition: "all 0.15s"
+                    }}
+                  >
+                    {tab.label}
+                  </span>
+                ))}
+              </div>
 
-        {/* ── Right sidebar ── */}
-        <aside className="right-sidebar">
-
-          {/* Chat */}
-          <div className="chat-wrapper">
-            <div className="chat-title-row">
-              <span className="chat-title">Health Advisor</span>
-              {geminiKey
-                ? <span className="ai-badge ai-badge-on">Gemini Active</span>
-                : <span className="ai-badge ai-badge-off">Rule-based</span>
-              }
-            </div>
-            <div className="chat-log">
-              {chatHistory.map((m, i) => (
-                <div className={`msg msg-${m.from}`} key={i}>
-                  <span className="msg-sender">{m.from === "bot" ? "AtmosEdge" : "You"}</span>
-                  <div className="msg-body">{m.text}</div>
-                </div>
-              ))}
-              {chatLoading && (
-                <div className="msg msg-bot">
-                  <div className="msg-body">
-                    <div className="typing-indicator">
-                      <div className="typing-dot" />
-                      <div className="typing-dot" />
-                      <div className="typing-dot" />
-                    </div>
+              {/* Tab panels */}
+              <div style={{ flex: 1 }}>
+                {dashboardTab === "forecast" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {stationForecasts.map((fc, i) => {
+                      const fTime = new Date(fc.forecast_time);
+                      const slug = aqiSlug(fc.predicted_aqi);
+                      return (
+                        <div key={i} className="forecast-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: "8px" }}>
+                          <div>
+                            <span style={{ fontSize: "11px", color: "#3b82f6", fontWeight: "bold" }}>+{24 * (i+1)}h Forecast Horizon</span>
+                            <h4 style={{ margin: "2px 0", fontSize: "13px" }}>{fTime.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}</h4>
+                            <span style={{ fontSize: "10px", color: "var(--text-3)" }}>Uncertainty: {fc.pm25_lower.toFixed(0)} – {fc.pm25_upper.toFixed(0)} µg/m³</span>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <strong style={{ fontSize: "20px", color: `var(--${slug === 'very-poor' ? 'purple' : slug === 'satisfactory' ? 'accent' : slug})` }}>{fc.predicted_aqi.toFixed(0)} AQI</strong>
+                            <span style={{ display: "block", fontSize: "10px", color: "var(--text-3)" }}>{fc.category}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
+                )}
+
+                {dashboardTab === "analytics" && (
+                  <Analytics 
+                    history={stationHistory} 
+                    forecasts={stationForecasts} 
+                  />
+                )}
+
+                {dashboardTab === "shap" && (
+                  <Explainability 
+                    stationId={selectedStationId} 
+                  />
+                )}
+
+                {dashboardTab === "comparison" && (
+                  <Comparison 
+                    stations={stations} 
+                  />
+                )}
+              </div>
             </div>
-            <form className="chat-form" onSubmit={handleChat}>
-              <input
-                className="chat-input"
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                placeholder="Ask about air safety…"
-                disabled={chatLoading}
-              />
-              <button className="btn btn-primary" type="submit" disabled={chatLoading || !chatInput.trim()}>
-                Send
-              </button>
-            </form>
+
+            {/* MLOps health monitoring telemetry */}
+            {monitoring && (
+              <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", fontSize: "11px" }}>
+                <div style={{ display: "flex", gap: "20px", color: "var(--text-2)" }}>
+                  <span>MAE: <strong>{monitoring.current_mae.toFixed(4)}</strong></span>
+                  <span>RMSE: <strong>{monitoring.current_rmse.toFixed(4)}</strong></span>
+                  <span>Prediction Drift: <strong style={{ color: "#10b981" }}>{monitoring.prediction_drift.toFixed(4)}</strong></span>
+                </div>
+                <span style={{ color: "#10b981", fontWeight: "bold" }}>● system healthy</span>
+              </div>
+            )}
+
           </div>
 
-          {/* Enforcement */}
-          <div className="enforcement-wrapper">
-            <div className="enforcement-title-row">
-              <span className="enforcement-title">Enforcement Queue</span>
-              {enforcements.length > 0 && (
-                <span className="enforcement-count">{enforcements.filter(x => x.status === "Pending").length} pending</span>
-              )}
-            </div>
-            <div className="target-list">
-              {enforcements.length > 0 ? enforcements.map((t, i) => (
-                <div className="target-card" key={i}>
-                  <div className="target-card-header">
-                    <span className="target-type-tag">{t.type}</span>
-                    <span className={`status-pill ${t.status.toLowerCase()}`}>{t.status}</span>
-                  </div>
-                  <div className="target-name">{t.name}</div>
-                  <div className="target-evidence">
-                    Risk {fmt(t.risk_score, 1)} · {t.ward_name} · PM {t.evidence_packet?.detected_pm25 ?? "—"} µg/m³
-                  </div>
-                  <div className="risk-bar-track">
-                    <div className="risk-bar-fill" style={{ width: `${Math.min(t.risk_score, 100)}%` }} />
-                  </div>
-                  {t.status === "Pending" && (
-                    <button className="btn btn-ghost" style={{ marginTop: 6, fontSize: 11, height: 26, padding: "0 10px" }} onClick={() => handleInspect(t.id)}>
-                      Mark Inspected
-                    </button>
-                  )}
-                </div>
-              )) : <p className="empty-state">No violations in queue.</p>}
-            </div>
-          </div>
-
-        </aside>
-      </div>
+        </div>
+      )}
 
       {loading && (
         <div className="loader-overlay">
-          <div className="loader-spinner" />
-          <span className="loader-text">Loading ward data…</span>
+          <div className="loader-spinner"></div>
+          <span style={{ marginLeft: "14px", fontSize: "13px" }}>Loading AtmosEdgeAI metrics...</span>
         </div>
       )}
     </div>

@@ -1011,3 +1011,118 @@
 .adv-poor        { background: var(--orange-dim); color: var(--orange); }
 .adv-very-poor   { background: var(--red-dim);    color: var(--red); }
 .adv-severe      { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+
+/* ─── Leaflet Map Custom Marker Styles ────────────────────────────────── */
+.custom-map-marker-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.custom-marker-pulsing {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  opacity: 0.35;
+  z-index: 1;
+}
+
+.custom-marker-pulsing.active {
+  animation: marker-pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.custom-marker-pill {
+  position: absolute;
+  z-index: 2;
+  background: var(--bg-2);
+  border: 1.5px solid;
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: all 0.2s ease-in-out;
+}
+
+.custom-marker-pill.selected {
+  transform: scale(1.22);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+  background: var(--bg-3);
+}
+
+@keyframes marker-pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  100% { transform: scale(2.8); opacity: 0; }
+}
+
+.leaflet-tooltip-card {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #fff;
+  background: #0b1220;
+  border: 1px solid #1e2d4a;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+/* ─── Alert drawer ────────────────────────────────────────────────────── */
+.alert-drawer {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  width: 320px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #1e2d4a;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
+  z-index: 9999;
+  animation: slide-in 0.22s ease-out;
+}
+
+@keyframes slide-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.alert-item.danger { background: rgba(239, 68, 68, 0.12); border: 1.2px solid #ef4444; }
+.alert-item.warning { background: rgba(245, 158, 11, 0.12); border: 1.2px solid #f59e0b; }
+.alert-item.success { background: rgba(16, 185, 129, 0.12); border: 1.2px solid #10b981; }
+
+.alert-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-3);
+}
+
+.live-pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  animation: pulse-live 1.6s infinite;
+}
+
+@keyframes pulse-live {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.6; }
+}
+
