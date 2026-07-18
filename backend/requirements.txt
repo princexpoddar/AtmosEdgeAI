@@ -11,4 +11,6 @@ torch
 matplotlib
 pyarrow
 xgboost
+python-dotenv
+shap
 
