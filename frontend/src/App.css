@@ -1459,12 +1459,109 @@
 }
 
 /* ─── Enforcement page layout ────────────────────────────────────────── */
+/* ─── Global utility classes ─────────────────────────────────────── */
+.loader-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 300px;
+  color: var(--text-2);
+}
+
+.loader-text {
+  font-size: 13px;
+  color: var(--text-2);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  margin: 0 0 12px 0;
+}
+
+.error-boundary-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 12px;
+  color: var(--text-1);
+  text-align: center;
+  padding: 40px;
+}
+
+.error-boundary-fallback h3 {
+  color: var(--red);
+  margin: 0;
+}
+
+.error-boundary-fallback p {
+  color: var(--text-2);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ─── Enforcement page ───────────────────────────────────────────── */
 .enforcement-page {
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
   flex: 1;
+}
+
+.enforcement-loading-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 60vh;
+}
+
+.enforcement-loading-text {
+  font-size: 13px;
+  color: var(--text-2);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.enforcement-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 50vh;
+  text-align: center;
+  padding: 40px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.enforcement-error-icon {
+  font-size: 40px;
+}
+
+.enforcement-error-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0;
+}
+
+.enforcement-error-msg {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 0;
+  max-width: 400px;
 }
 
 .enforcement-summary-banner {

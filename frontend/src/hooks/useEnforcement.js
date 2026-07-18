@@ -1,21 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getEnforcementDashboard } from "@/services/api";
 
 export function useEnforcement() {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // start true to avoid blank flash
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
 
     getEnforcementDashboard(controller.signal)
-      .then(setData)
+      .then((result) => {
+        setData(result);
+      })
       .catch((err) => {
         if (err.name !== "AbortError") {
-          setError("Failed to fetch municipal command center telemetry.");
+          console.error("[useEnforcement] fetch failed:", err);
+          setError("Failed to load Municipal Command Center. Is the backend running?");
         }
       })
       .finally(() => setLoading(false));
@@ -23,5 +26,10 @@ export function useEnforcement() {
     return () => controller.abort();
   }, []);
 
-  return { data, loading, error };
+  useEffect(() => {
+    const cleanup = fetchData();
+    return cleanup;
+  }, [fetchData]);
+
+  return { data, loading, error, refetch: fetchData };
 }
