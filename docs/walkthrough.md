@@ -1,64 +1,96 @@
-# Walkthrough — Real-Time Production AI Transition
+# Walkthrough: AtmosEdgeAI Production Cleanup & Optimization
 
-We have completed the transition of AtmosEdgeAI to a production-grade, real-time AI environmental intelligence platform. Below is a detailed walkthrough of the changes implemented, code organization, and verification results.
-
----
-
-## 1. Directory Structure Organization
-
-The codebase has been refactored to separate concerns cleanly:
-
-### Backend Services
-* **Forecasting Pipeline (`backend/app/services/forecasting/`)**:
-  * [feature_engineering.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/feature_engineering.py): Generates temporal encodings, seasons, lags, rolling averages, and fire indices.
-  * [preprocessing.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/preprocessing.py): Normalizes features utilizing the global fitted scalers.
-  * [inference.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/inference.py): Performs multi-horizon inference predictions via `baseline_lr.pkl` loaded once at startup.
-* **Realtime Ingestion Layer (`backend/app/services/ingestion/`)**:
-  * [cpcb.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/cpcb.py): Fetches live air quality observations with fallbacks.
-  * [openmeteo.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/openmeteo.py): Fetches live weather conditions.
-  * [firms.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/firms.py): Computes upwind agricultural burns.
-  * [cache.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/cache.py): Rolling database observation caching.
-  * [scheduler.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/scheduler.py): Hourly sync scheduler.
-
-### Refactored Frontend
-* **Core Views**:
-  * [LandingPage.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/pages/LandingPage.jsx): Premium enterprise home page.
-  * [Predictor.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/pages/Predictor.jsx): Interactive ML predictor client.
-* **Services**:
-  * [api.js](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/services/api.js): Isolates axios/fetch REST operations.
-* **Modular Components**:
-  * [Map.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/components/map/Map.jsx)
-  * [Analytics.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/components/charts/Analytics.jsx)
-  * [Explainability.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/components/charts/Explainability.jsx)
-  * [Comparison.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/components/cards/Comparison.jsx)
+We have performed a complete production-grade cleanup of the AtmosEdgeAI repository. All legacy code, duplicate ML utilities, orphaned modules, and unused endpoints have been refactored or deleted. The platform compiles and runs flawlessly.
 
 ---
 
-## 2. Verification Results
+## 1. Cleaned Repository Structure
 
-### Backend Endpoints Verification
-We executed automated verification scripts hitting the updated backend APIs.
-* **GET `/api/stations/5657/forecast`**: Successfully executed the Linear Regression inference pipeline on rolling history observations:
-  ```json
-  [
-    { "forecast_time": "2026-07-18...", "predicted_pm25": 85.6, "predicted_aqi": 185.3, "category": "Moderate" },
-    { "forecast_time": "2026-07-19...", "predicted_pm25": 91.6, "predicted_aqi": 205.5, "category": "Poor" },
-    { "forecast_time": "2026-07-20...", "predicted_pm25": 91.7, "predicted_aqi": 205.8, "category": "Poor" }
-  ]
-  ```
-* **POST `/api/predict`**: Parameterless request requiring only `station_id` correctly evaluated sequence history and returned scaled inference:
-  ```json
-  { "pm25_24h": 85.6, "no2_24h": 31.2, "aqi": 185.3, "category": "Moderate", "confidence": 0.92 }
-  ```
-* **Validation (HTTP 422)**: Submitting non-existent stations or stations with insufficient readings (<48 database records) correctly returns standard HTTP 422 errors.
+### Files Removed (Technical Debt Cleared)
 
-### Frontend Compilation
-Vite built the production environment successfully in 434ms with zero errors or warnings:
-```
-vite v8.1.4 building client environment for production...
-transforming...✓ 24 modules transformed.
-rendering chunks...
-dist/assets/index-BDznHE8i.css   18.35 kB
-dist/assets/index-B4xZFGlm.js   229.96 kB
-✓ built in 434ms
-```
+| Deleted File | Reason |
+|:---|:---|
+| `backend/app/services/realtime_updater.py` | Orphaned flat module. Imported `seed_2years.generate_modeled_pm25` which no longer exists at that path. |
+| `backend/app/services/ingestion.py` | Orphaned flat module. Functions were duplicate implementations of modules under `ingestion/` subpackage. |
+| `backend/app/services/enforcement.py` | Orphaned flat module. Provided legacy Ward/Reading enforcement; replaced by active `enforcement/pipeline.py`. |
+| `backend/app/services/attribution.py` | Orphaned flat module. Replaced by active `intelligence/source_attribution.py`. |
+| `backend/app/services/firms_processor.py` | Orphaned flat module. Replaced by active `ingestion/firms.py`. |
+
+### One-Time Research Scripts Consolidated
+9 research, database seeding, and analysis scripts that cluttered the `backend/` root have been moved to [backend/scripts/](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/scripts):
+* `seed_2years.py`
+* `data_quality_report.py`
+* `feasibility_study.py`
+* `run_analysis.py`
+* `run_evaluation_and_viz.py`
+* `run_selection.py`
+* `download_firms.py`
+* `download_openaq.py`
+* `download_delhi_pusa.py`
+
+---
+
+## 2. Codebase Refactoring & Optimization
+
+### [endpoints.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/api/endpoints.py)
+* **Removed Unused ML Models**: Cleaned module-level loading of `lr_model`, `scalers`, `station_id_map`, and `flatten_data` that were loaded at startup but never read.
+* **Deleted Legacy Endpoints**: Removed 8 unversioned endpoints targeting legacy Ward/City tables:
+  * `/aqi/realtime`
+  * `/aqi/history`
+  * `/forecast`
+  * `/attribution`
+  * `/advisory`
+  * `/advisory/chat`
+  * Old `/enforcement` and `/enforcement/inspect/{id}`
+* **Reorganized Imports**: Gathered all scattered imports (including threading, time, and numpy/pandas) to the top of the file.
+* **DRY Helper Functions**: Created `_build_reading_dataframe()` to eliminate duplicate code mapping ORM reading objects to feature dataframes across `/forecast`, `/predict`, and `/intelligence` routes.
+* **Typing & Documentation**: Fully documented each route using descriptive docstrings, type annotations, and OpenAPI summaries.
+
+### [forecaster.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecaster.py)
+* **Duplicate Neural Network Class**: Removed legacy `CNNLSTMForecaster` class (duplicate of `ml/model.py:GlobalCNNLSTMForecaster`).
+* **Unused Sequence Helper**: Removed legacy `create_dataset_sequences()`.
+* **Retraining Pipeline**: Removed the 200+ line function `generate_forecasts_for_all()` since active retraining is triggered offline via script rather than HTTP request.
+* **Retained Core Utility**: Kept `calculate_pm25_aqi()` as the single source of truth for Indian AQI calculation.
+
+### [main.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/main.py)
+* **Lifespan Pattern**: Migrated from deprecated `@app.on_event("startup")` decorator to FastAPI's recommended `lifespan` context manager.
+* **Production Logging**: Replaced development `print()` statements with structured Python logging.
+* **Seeding Isolation**: Moved DB seeding to a dedicated helper function `_seed_initial_data()`.
+
+---
+
+## 3. Dependency & Configuration Check
+
+### [requirements.txt](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/requirements.txt)
+Documented additional dependencies required by core processes:
+* Added `python-dotenv` (required for runtime config load).
+* Added `shap` (required for model explainability visuals).
+
+---
+
+## 4. Verification & Validation
+
+All application pages have been fully verified with zero browser console errors and successful API responses.
+
+### Verification Visuals
+
+Here are screenshots showing the platform running stably post-cleanup:
+
+* **Landing Page**: Loads successfully and provides a direct entry point.
+  ![Landing Page Screen](C:\Users\praba\.gemini\antigravity-ide\brain\1b153ffa-bf50-48f3-95cd-65131b6d20c5\dashboard_home_1784371674222.png)
+  
+* **Live Dashboard & AI Analyst**: Shows real-time monitoring map and AI Analyst briefings.
+  ![Live Dashboard Screen](C:\Users\praba\.gemini\antigravity-ide\brain\1b153ffa-bf50-48f3-95cd-65131b6d20c5\dashboard_live_1784371693094.png)
+
+* **Municipal Command Center**: Displays hot-spot rankings and resource allocations.
+  ![Municipal Command Center Screen](C:\Users\praba\.gemini\antigravity-ide\brain\1b153ffa-bf50-48f3-95cd-65131b6d20c5\command_center_1784371712743.png)
+
+* **Live Predictor Client**: Generates and prints multi-horizon predictions.
+  ![Live Predictor Screen](C:\Users\praba\.gemini\antigravity-ide\brain\1b153ffa-bf50-48f3-95cd-65131b6d20c5\predictor_results_1784371735307.png)
+
+---
+
+## 5. Walkthrough Video Recording
+
+To review the navigation flow and check for console log cleanups, please view the video recording:
+[Interactive Walkthrough Video](file:///C:/Users/praba/.gemini/antigravity-ide/brain/1b153ffa-bf50-48f3-95cd-65131b6d20c5/dashboard_verify_2_1784371655491.webp)

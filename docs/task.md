@@ -1,25 +1,33 @@
-# Ingestion & Unification Task Checklist
+# Production Cleanup Tasks
 
-- [x] Unify Forecasting Service
-  - [x] Create `backend/app/services/forecasting/feature_engineering.py`
-  - [x] Create `backend/app/services/forecasting/preprocessing.py`
-  - [x] Create `backend/app/services/forecasting/inference.py`
-- [x] Create Realtime Ingestion Layer
-  - [x] Create `backend/app/services/ingestion/cpcb.py`
-  - [x] Create `backend/app/services/ingestion/openmeteo.py`
-  - [x] Create `backend/app/services/ingestion/firms.py`
-  - [x] Create `backend/app/services/ingestion/cache.py`
-  - [x] Create `backend/app/services/ingestion/scheduler.py`
-- [x] Update Backend Rest API Endpoints
-  - [x] Modify `backend/app/api/endpoints.py` to use unified inference.py
-  - [x] Implement parameter-less `/predict` pulling database history
-  - [x] Return HTTP 422 for insufficient datasets
-- [x] Restructure Frontend Codebase
-  - [x] Create directories `frontend/src/pages`, `frontend/src/components/charts`, `frontend/src/components/map`, `frontend/src/components/layout`, `frontend/src/services`
-  - [x] Move views to Pages components
-  - [x] Isolate API fetch requests into `frontend/src/services/api.js`
-- [x] Clean Technical Debt
-  - [x] Remove duplicate codes and unused assets
-- [x] Final Verification
-  - [x] Run backend tests and verify uvicorn launches
-  - [x] Build Vite React client successfully
+## Phase 1: Remove Orphaned Modules
+- [x] Verify frontend API calls before removing endpoints
+- [ ] Delete `services/realtime_updater.py`
+- [ ] Delete `services/ingestion.py` (flat legacy)
+- [ ] Delete `services/enforcement.py` (flat legacy)
+- [ ] Delete `services/attribution.py` (flat legacy)
+- [ ] Delete `services/firms_processor.py` (flat legacy)
+- [ ] Create `backend/scripts/` directory
+- [ ] Move 9 root-level research scripts to `backend/scripts/`
+
+## Phase 2: Clean endpoints.py
+- [ ] Move imports to top (threading, time)
+- [ ] Remove unused ML asset loading (lr_model, scalers, station_id_map, flatten_data)
+- [ ] Remove legacy Ward-based endpoints
+- [ ] Consolidate AQI label function
+
+## Phase 3: Clean forecaster.py
+- [ ] Remove duplicate CNNLSTMForecaster class
+- [ ] Remove create_dataset_sequences() legacy function
+- [ ] Clean unused imports
+
+## Phase 4: Configuration
+- [ ] Add python-dotenv, shap to requirements.txt
+- [ ] Update main.py startup event to lifespan pattern
+
+## Phase 5: Verify & Commit
+- [ ] Restart backend, confirm startup
+- [ ] Run endpoint health check
+- [ ] Check frontend console for errors
+- [ ] Git commit cleanup batch
+- [ ] Generate walkthrough/docs

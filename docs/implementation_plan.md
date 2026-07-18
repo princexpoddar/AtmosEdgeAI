@@ -1,120 +1,175 @@
-# Implementation Plan — Real-Time Production AI Transition
+# AtmosEdgeAI Production Cleanup — Implementation Plan
 
-AtmosEdgeAI is transitioning from an offline research prototype into a production-grade, real-time AI forecasting platform. This implementation plan outlines the steps to build a robust real-time ingestion layer, unify the forecasting engine around the deployed Linear Regression baseline model, and refactor the Vite-React frontend into a professional modular structure.
+## Summary
+
+A full audit of the repository reveals **7 categories of technical debt** requiring cleanup across backend, frontend, ML pipeline, and configuration. All changes preserve existing functionality.
 
 ---
 
-## User Review Required
+## Audit Findings
 
-> [!IMPORTANT]
-> The original PyTorch CNN-LSTM global forecaster will no longer be used for server-side forecasts in the dashboard. Instead, both the **Interactive Predictor** and the **Dashboard Views** will be unified to use the **same Linear Regression baseline model** (`baseline_lr.pkl`), which runs on-the-fly from live data.
-> The historical parquet datasets will be kept strictly read-only for analytics, SHAP visualization, and model retraining purposes.
+### 🔴 CRITICAL: Orphaned Modules (No Active Callers)
+
+| File | Issue |
+|------|-------|
+| `backend/app/services/realtime_updater.py` | Imports `seed_2years.generate_modeled_pm25` which no longer exists at that path. Never called from any endpoint or scheduler. |
+| `backend/app/services/ingestion.py` | Top-level flat module. Its `calculate_stagnation` + `fetch_openmeteo_history` are DUPLICATED in `ingestion/openmeteo.py` and `data_pipeline/`. No endpoint imports it. |
+| `backend/app/services/enforcement.py` | Top-level flat module. Provides `prioritize_enforcements()` on Ward/Reading tables (legacy). Never called from endpoints. Active enforcement is in `services/enforcement/pipeline.py`. |
+| `backend/app/services/attribution.py` | Top-level flat module. 6563 bytes. No active endpoint imports it. |
+| `backend/app/services/firms_processor.py` | 8048 bytes. Not imported by any active code. |
+| `backend/app/services/data_pipeline/` | Entire directory (7 files). Used only by `seed_2years.py` (one-time historical seeder) and `forecaster.py`'s retrain path. **The retrain path is never triggered from any endpoint.** |
+
+### 🟠 HIGH: Duplicate / Legacy ML Code
+
+| Issue | Location |
+|-------|----------|
+| `CNNLSTMForecaster` class redefined in `forecaster.py` | Duplicate of `services/ml/model.py:GlobalCNNLSTMForecaster`. The `global_model.pth` is the production model and uses `GlobalCNNLSTMForecaster`. |
+| `create_dataset_sequences()` in `forecaster.py` L77 | "Legacy sliding window" — never used in production inference path |
+| `flatten_data()` in `endpoints.py` L24 | Defined but never called anywhere in endpoints.py |
+| `lr_model`, `scaler_X`, `scaler_y`, `scaler_static` loaded at module level L35-51 in `endpoints.py` | These variables are loaded but **never used** — the actual inference uses `predict_forecast()` from `services/forecasting/inference.py` which loads its own scaler |
+| `get_aqi_label_cpcb()` defined in `endpoints.py` L56 AND same function `get_aqi_category()` in `advisory.py` | Two functions doing same thing with slightly different names |
+| `station_id_map` loaded at module level in `endpoints.py` | Loaded but never referenced |
+| `generate_forecasts_for_all()` in `forecaster.py` | 200+ line function for full retrain+inference, never called from any endpoint; only the fast inference `predict_forecast()` is called |
+
+### 🟠 HIGH: Legacy Root-level Script Files (Backend Root)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `backend/seed_2years.py` | One-time 2-year historical seeder | DONE — already ran |
+| `backend/data_quality_report.py` | Analysis script | One-time use |
+| `backend/feasibility_study.py` | Research analysis | One-time use |
+| `backend/run_analysis.py` | Evaluation script | One-time use |
+| `backend/run_evaluation_and_viz.py` | Evaluation + plots | One-time use |
+| `backend/run_selection.py` | Model selection | One-time use |
+| `backend/download_firms.py` | One-time NASA FIRMS download | Done |
+| `backend/download_openaq.py` | One-time OpenAQ download | Done |
+| `backend/download_delhi_pusa.py` | One-time download | Done |
+
+These are **one-time research scripts** — they should be moved to `scripts/` rather than cluttering the backend root.
+
+### 🟡 MEDIUM: API Inconsistencies
+
+| Issue | Detail |
+|-------|--------|
+| Mixed versioning | Some endpoints are `/api/v1/intelligence/` while others are unversioned `/api/predict`, `/api/stations`. No consistent versioning. |
+| `/api/aqi/realtime` and `/api/aqi/history` | Use legacy Ward/Reading tables, never called by current frontend |
+| `/api/forecast` | Uses legacy Ward/Forecast table, never called by current frontend |
+| `/api/attribution` | Uses legacy Attribution table, never called by current frontend |
+| `/api/advisory` | Uses legacy Advisory table, never called by current frontend |
+| `/api/enforcement` | OLD enforcement using Ward/EnforcementTarget, duplicated by `/api/v1/enforcement` |
+| `import threading; import time as _time` in endpoints.py L556 | Inline imports mid-file — should be at top |
+| `flatten_data()` never used | Dead code in endpoints.py |
+
+### 🟡 MEDIUM: Frontend Issues
+
+| Issue | Detail |
+|-------|--------|
+| `getFeatureImportance` imported in `api.js` but only used in Explainability.jsx — OK |
+| `getMonitoring` called but monitoring state used only in header badge — minor |
+| Inline `import threading` mid-file in endpoints.py | Should be at top |
+| `fmt()` helper defined but barely used in App.jsx | Could be removed |
+
+### 🟢 LOW: Code Quality
+
+| Issue | Location |
+|-------|----------|
+| `print()` statements in scheduler.py and endpoints.py | Should be `logger.info/warning` |
+| `@app.on_event("startup")` deprecated in FastAPI | Should use `lifespan` context manager |
+| `declarative_base()` deprecated in SQLAlchemy 2.x | Should use `DeclarativeBase` |
+| Missing type hints on many endpoint functions | |
+| `pickle` imported in endpoints.py but unused after ML model variables removed | |
+| `import numpy as np`, `import pandas as pd` in endpoints.py used only in fallback | |
 
 ---
 
 ## Proposed Changes
 
-### Component 1: Unified Forecasting Engine [NEW]
+### Phase 1: Remove Dead Code / Orphaned Modules
 
-We will create a unified forecasting service inside `backend/app/services/forecasting/`. This service will load the deployed model (`baseline_lr.pkl`) and global scaler (`global_scaler.pkl`) **once at startup** and host preprocessing, feature engineering, and inference tasks.
+#### [DELETE] `backend/app/services/realtime_updater.py`
+Never imported by any endpoint or scheduler. Has broken import (`seed_2years.generate_modeled_pm25`).
 
-#### [NEW] [inference.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/inference.py)
-* Loads `baseline_lr.pkl` and `global_scaler.pkl` at module initialization.
-* Handles inference calls. Expects a sequence of the last 24 hours of 41-dimensional features and the static variables of the target station.
-* Computes forecast outputs (PM2.5 and NO₂ concentrations) for 24h, 48h, and 72h horizons.
+#### [DELETE] `backend/app/services/ingestion.py`
+Orphaned flat module. Its `calculate_stagnation` is duplicated in `data_pipeline/preprocessor.py`.
 
-#### [NEW] [feature_engineering.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/feature_engineering.py)
-* Houses the feature construction pipeline:
-  * Computes cyclic sine/cosine hour & day-of-year encodings.
-  * Calculates seasons, rolling averages, rolling standard deviations (6h, 12h, 24h windows), and lag vectors (t-1, t-2, t-3, t-24).
-  * Computes the NASA FIRMS upwind transport index using fire intensities and wind vectors.
+#### [DELETE] `backend/app/services/enforcement.py`
+Orphaned flat module. Active enforcement is in `services/enforcement/pipeline.py`.
 
-#### [NEW] [preprocessing.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/forecasting/preprocessing.py)
-* Normalizes incoming temporal records column-wise using the loaded global scaler `scaler_X`.
-* Normalizes static features (latitude, longitude, city_encoded) using `scaler_static`.
-* Restores predicted values back to original space using `scaler_y`.
+#### [DELETE] `backend/app/services/attribution.py`
+Orphaned flat module. Attribution logic is in `services/intelligence/source_attribution.py`.
 
----
+#### [DELETE] `backend/app/services/firms_processor.py`
+Orphaned flat module. FIRMS data is handled by `services/ingestion/firms.py`.
 
-### Component 2: Real-Time Ingestion Layer [NEW]
-
-We will establish a dedicated real-time data ingestion layer in `backend/app/services/ingestion/` to isolate external provider calls, handle validation, implement caching, and log failures.
-
-```mermaid
-flowchart TD
-    subgraph Realtime Ingestion Layer
-        cpcb[cpcb.py] --> norm[Normalizer / Validator]
-        meteo[openmeteo.py] --> norm
-        firms[firms.py] --> norm
-    end
-    norm --> sqlite[(geobreathe.db sqlite)]
-```
-
-#### [NEW] [cpcb.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/cpcb.py)
-* Ingests latest air quality metrics for the 36 metropolitan stations.
-* Implements retry logic and fallbacks if CPCB endpoints are slow or offline.
-
-#### [NEW] [openmeteo.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/openmeteo.py)
-* Ingests live weather forecasts and current conditions (temperature, humidity, wind vectors).
-
-#### [NEW] [firms.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/firms.py)
-* Ingests live MODIS/VIIRS fire coordinates. Uses regional local CSV databases as high-speed caches for offline execution.
-
-#### [NEW] [scheduler.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/scheduler.py)
-* Runs a cron task every hour to:
-  * Query the live CPCB and weather metrics.
-  * Validate and normalize readings.
-  * Store the observations directly inside `geobreathe.db`.
-
-#### [NEW] [cache.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/services/ingestion/cache.py)
-* Maintains a rolling cache of the last 72 hours of observations per station.
-* Cleans and marks invalid or missing observations cleanly (rather than defaulting to fake averages).
+#### [MOVE] `backend/*.py` research scripts → `backend/scripts/`
+Move `seed_2years.py`, `data_quality_report.py`, `feasibility_study.py`, `run_analysis.py`, `run_evaluation_and_viz.py`, `run_selection.py`, `download_firms.py`, `download_openaq.py`, `download_delhi_pusa.py`.
 
 ---
 
-### Component 3: Backend API Restructuring [MODIFY]
+### Phase 2: Clean endpoints.py
 
-#### [MODIFY] [endpoints.py](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/backend/app/api/endpoints.py)
-* Refactors `POST /api/predict` to require ONLY `"station_id"` and `"forecast_horizon"`. 
-* The route will:
-  1. Retrieve the last 24-hour observation sequence from the SQLite database.
-  2. If the database has insufficient observations (<24 hours of data), return an **HTTP 422** error response.
-  3. Otherwise, pass the sequence to the forecasting inference pipeline, apply scaling, predict the target concentrations, and return the forecast.
-* Refactors `/stations/{id}/forecast` to execute the exact same Linear Regression inference pipeline instead of seasonal perturbation formulas.
+#### Remove unused ML asset loading (L31-51)
+`lr_model`, `scaler_X`, `scaler_y`, `scaler_static`, `station_id_map` loaded at module level but never used.
+
+#### Remove `flatten_data()` (L24-27)
+Dead code — never called.
+
+#### Move `import threading; import time as _time` to top of file
+
+#### Remove unused legacy endpoints (L414-543)
+- `/api/aqi/realtime` — legacy Ward-based, not called by frontend
+- `/api/aqi/history` — legacy Ward-based, not called by frontend
+- `/api/forecast` — legacy Ward-based forecast, not called by frontend
+- `/api/attribution` — legacy Attribution table, not called by frontend
+- `/api/advisory` — legacy Advisory table, not called by frontend
+- `/api/advisory/chat` — ChatRequest model and advisory_chat endpoint
+- `/api/enforcement` (old Ward-based one) — duplicated by `/api/v1/enforcement`
+- `/api/enforcement/inspect/{target_id}` — operates on old EnforcementTarget table
+
+> [!IMPORTANT]  
+> Before removing, I'll verify these are truly unused by checking frontend API calls.
+
+#### Consolidate `get_aqi_label_cpcb()` → single function
 
 ---
 
-### Component 4: Frontend Refactoring & Cleanup [MODIFY]
+### Phase 3: Clean forecaster.py
 
-We will refactor the frontend codebase into a structured directories layout to separate concerns and clean up all dead code:
+#### Remove `CNNLSTMForecaster` class (L32-58)
+Duplicate of `services/ml/model.py:GlobalCNNLSTMForecaster`. Remove and import from canonical location.
 
-```
-src/
-  ├── components/
-  │     ├── cards/          # Metrics and forecast cards
-  │     ├── charts/         # SVG trends and heatmaps
-  │     ├── layout/         # Header and drawer overlays
-  │     ├── map/            # Leaflet dynamic map
-  │     └── common/         # Alert banners
-  ├── pages/
-  │     ├── Dashboard.jsx   # Live dashboard
-  │     ├── Predictor.jsx   # Real-time predictor form
-  │     └── Landing.jsx     # Product homepage
-  ├── services/
-  │     └── api.js          # Unified axios/fetch clients
-  ├── App.jsx               # Main state routing
-  └── index.css             # Base styles
-```
+#### Remove `create_dataset_sequences()` (L77-89)
+Never used in any active code path.
+
+#### Remove `generate_forecasts_for_all()` retrain code path
+The retrain path is never triggered from any endpoint. Keep only the inference path.
+
+---
+
+### Phase 4: requirements.txt
+
+Add missing `python-dotenv` and `shap` (used in Explainability.jsx backend).
+
+---
+
+### Phase 5: main.py
+
+Update deprecated `@app.on_event("startup")` → lifespan context manager.
 
 ---
 
 ## Verification Plan
 
-### Automated Tests
-* Run api verify tests to hit `POST /api/predict` with only `station_id` and check that it pulls DB sequences, computes inference, and returns 200 OK.
-* Verify `POST /api/predict` returns HTTP 422 when hitting an invalid station or a station with insufficient records.
-* Build the frontend client to verify clean compile states.
+- Backend starts without import errors
+- `/api/stations` returns data
+- `/api/stations/{id}/forecast` returns forecasts
+- `/api/v1/intelligence/{id}` returns intelligence
+- `/api/v1/enforcement` returns enforcement data
+- Frontend dashboard loads with no console errors
+- All API calls in `services/api.js` get 200 responses
 
-### Manual Verification
-* Validate map tiles swap correctly under Light/Dark themes.
-* Verify the live status card displaying the data source ("Live", "Cached", "Historical") depending on database timestamps.
+## Open Questions
+
+1. Should legacy Ward-based endpoints be kept for backward compatibility or removed? (My recommendation: remove — they're never called by the frontend)
+2. Should `backend/scripts/` be gitignored or kept tracked?
+3. Should `data_pipeline/` directory be removed entirely or kept for potential future retraining?
