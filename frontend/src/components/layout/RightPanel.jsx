@@ -62,8 +62,153 @@ function ForecastCards({ forecasts }) {
   );
 }
 
+function StationDetailHeader({ station, loading }) {
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: "20px", marginBottom: "16px" }}>
+        <Skeleton height="80px" />
+      </div>
+    );
+  }
+
+  if (!station) {
+    return (
+      <div className="card" style={{ padding: "20px", marginBottom: "16px", textAlign: "center", color: "#64748b" }}>
+        No station selected. Choose a station from the directory or map.
+      </div>
+    );
+  }
+
+  // Map backend status strings to clean, user-friendly labels
+  let statusLabel = "Live Observation";
+  let statusKey = station.quality_status || "LIVE";
+
+  if (statusKey === "CACHED") {
+    statusLabel = "Cached Observation";
+  } else if (statusKey === "MODEL_ESTIMATE") {
+    statusLabel = "Model Estimate";
+  } else if (statusKey === "STALE") {
+    statusLabel = "Stale Data";
+  } else if (statusKey === "UNAVAILABLE") {
+    statusLabel = "Data Unavailable";
+  }
+
+  // Get color configurations
+  const getBadgeColors = (status) => {
+    switch (status) {
+      case "LIVE":
+        return { bg: "rgba(34, 197, 94, 0.12)", fg: "#4ade80", dot: "#22c55e" };
+      case "CACHED":
+        return { bg: "rgba(59, 130, 246, 0.12)", fg: "#60a5fa", dot: "#3b82f6" };
+      case "MODEL_ESTIMATE":
+        return { bg: "rgba(234, 179, 8, 0.12)", fg: "#facc15", dot: "#eab308" };
+      case "STALE":
+        return { bg: "rgba(249, 115, 22, 0.12)", fg: "#fb923c", dot: "#f97316" };
+      default:
+        return { bg: "rgba(148, 163, 184, 0.12)", fg: "#cbd5e1", dot: "#94a6b8" };
+    }
+  };
+
+  const colors = getBadgeColors(statusKey);
+  const aqiSlug = getAqiSlug(station.aqi);
+
+  return (
+    <div
+      className="card station-detail-header-card"
+      style={{
+        padding: "20px",
+        marginBottom: "16px",
+        background: "rgba(17, 24, 39, 0.7)",
+        backdropFilter: "blur(12px)",
+        border: "1px solid rgba(255, 255, 255, 0.05)"
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+        <div>
+          <h2 style={{ fontSize: "20px", fontWeight: "700", color: "#f8fafc", margin: 0 }}>{station.name}</h2>
+          <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px", margin: 0 }}>
+            {station.city}, {station.state} &bull; Elevation: {fmt(station.elevation, 0)}m
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "5px 12px",
+              borderRadius: "20px",
+              fontSize: "11px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              backgroundColor: colors.bg,
+              color: colors.fg
+            }}
+          >
+            <span
+              style={{
+                display: "inline-block",
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                backgroundColor: colors.dot
+              }}
+            />
+            <span>{statusLabel}</span>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <span className={`forecast-aqi-cat aqitxt-${aqiSlug}`} style={{ fontSize: "12px", fontWeight: "600", display: "block" }}>
+              {station.category}
+            </span>
+            <span style={{ fontSize: "24px", fontWeight: "800", color: "#f8fafc", lineHeight: "1" }}>
+              {station.aqi.toFixed(0)} <span style={{ fontSize: "12px", fontWeight: "500", color: "#64748b" }}>AQI</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "12px", padding: "12px", background: "rgba(15, 23, 42, 0.4)", borderRadius: "8px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>PM2.5</span>
+          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.pm25)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>µg/m³</span></strong>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>NO₂</span>
+          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.no2)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>µg/m³</span></strong>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Temperature</span>
+          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.temp)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>°C</span></strong>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Humidity</span>
+          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.humidity, 0)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>%</span></strong>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Wind Speed</span>
+          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.wind_speed)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>km/h</span></strong>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", fontSize: "11px", color: "#64748b", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "10px" }}>
+        <div>
+          <span>Source: <strong style={{ color: "#94a3b8" }}>{station.source || "Unknown"}</strong></span>
+          <span style={{ margin: "0 8px" }}>&bull;</span>
+          <span>Provider: <strong style={{ color: "#94a3b8" }}>{station.provider || "Unknown"}</strong></span>
+        </div>
+        {station.last_updated && (
+          <div>
+            <span>Updated: <strong style={{ color: "#94a3b8" }}>{station.last_updated}</strong> ({station.data_age_minutes || 0}m ago)</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function RightPanel({ forecasts, history, stationId, stations, loading }) {
   const [tab, setTab] = useState("analytics");
+  const selectedStation = (stations || []).find((s) => s.id === stationId);
 
   const tabs = [
     { key: "analytics", label: "Analytics" },
@@ -73,6 +218,9 @@ export default function RightPanel({ forecasts, history, stationId, stations, lo
 
   return (
     <div className="dashboard-content-col">
+      {/* Active Station Ingestion Details Header */}
+      <StationDetailHeader station={selectedStation} loading={loading} />
+
       <div className="panel-section">
         <div className="section-header">
           <span className="section-title">72h Forecast Outlook</span>

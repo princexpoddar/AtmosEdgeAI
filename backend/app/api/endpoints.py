@@ -69,6 +69,7 @@ class PredictRequest(BaseModel):
 def get_stations(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
     stations = db.query(Station).all()
     result = []
+    from backend.app.services.ingestion.cpcb import get_latest_station_metadata
     for s in stations:
         latest = (
             db.query(StationReading)
@@ -87,6 +88,8 @@ def get_stations(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
         pm25 = (latest.pm25 or 0.0) if latest else 0.0
         no2  = (latest.no2  or 0.0) if latest else 0.0
         aqi  = calculate_pm25_aqi(pm25)
+        
+        metadata = get_latest_station_metadata(s.id, db)
 
         result.append({
             "id":        s.id,
@@ -103,6 +106,11 @@ def get_stations(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
             "temp":      round((latest.temp     or 25.0) if latest else 25.0, 1),
             "humidity":  round((latest.humidity or 60.0) if latest else 60.0, 1),
             "wind_speed":round((latest.wind_speed or 10.0) if latest else 10.0, 1),
+            "source":    metadata["source"],
+            "provider":  metadata["provider"],
+            "quality_status": metadata["quality_status"],
+            "last_updated":   metadata["last_updated"],
+            "data_age_minutes": metadata["data_age_minutes"]
         })
     return result
 
@@ -530,3 +538,11 @@ def get_municipal_enforcement_dashboard(
             status_code=500,
             detail=f"Enforcement pipeline error: {e}",
         )
+
+
+@router.get("/v1/diagnostics/providers", summary="Get provider sync health statistics")
+def get_provider_diagnostics() -> Dict[str, Any]:
+    """Exposes provider health statistics for diagnostic monitoring."""
+    from backend.app.services.ingestion.cpcb import get_provider_health_diagnostics
+    return get_provider_health_diagnostics()
+
