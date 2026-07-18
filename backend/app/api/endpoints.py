@@ -553,11 +553,46 @@ def advisory_chat(payload: ChatRequest, db: Session = Depends(get_db)):
     response = generate_chat_response(payload.query, payload.ward_id, db, payload.gemini_api_key)
     return {"response": response}
 
+import threading
+import time as _time
+
+# Global sync state tracking
+_sync_state = {"status": "idle", "last_result": None, "started_at": None, "finished_at": None}
+
+def _run_sync_in_background():
+    global _sync_state
+    _sync_state["status"] = "running"
+    _sync_state["started_at"] = _time.time()
+    try:
+        from backend.app.services.ingestion.scheduler import trigger_hourly_ingestion
+        result = trigger_hourly_ingestion()
+        _sync_state["last_result"] = result
+        _sync_state["status"] = "completed"
+    except Exception as e:
+        _sync_state["last_result"] = {"error": str(e)}
+        _sync_state["status"] = "failed"
+    finally:
+        _sync_state["finished_at"] = _time.time()
+
 @router.post("/aqi/sync")
 def sync_aqi_database():
-    from backend.app.services.ingestion.scheduler import trigger_hourly_ingestion
-    result = trigger_hourly_ingestion()
-    return result
+    global _sync_state
+    if _sync_state["status"] == "running":
+        return {"status": "already_running", "message": "Sync already in progress. Check /api/aqi/sync/status for updates."}
+    thread = threading.Thread(target=_run_sync_in_background, daemon=True)
+    thread.start()
+    return {"status": "started", "message": "Live sync dispatched to background thread. Check /api/aqi/sync/status for progress."}
+
+@router.get("/aqi/sync/status")
+def get_sync_status():
+    global _sync_state
+    return {
+        "status": _sync_state["status"],
+        "last_result": _sync_state["last_result"],
+        "started_at": _sync_state["started_at"],
+        "finished_at": _sync_state["finished_at"],
+        "duration_s": round(_sync_state["finished_at"] - _sync_state["started_at"], 1) if _sync_state["finished_at"] and _sync_state["started_at"] else None
+    }
 
 @router.get("/v1/intelligence/{station_id}")
 def get_station_intelligence(station_id: str, db: Session = Depends(get_db)):

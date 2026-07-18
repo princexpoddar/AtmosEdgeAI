@@ -161,21 +161,44 @@ export default function App() {
     }).catch(() => {});
   }, [selectedStationId]);
 
-  // Ingestion database sync
+  // Ingestion database sync — background thread with status polling
   const handleSync = async () => {
     setSyncing(true);
     setError(null);
     setSyncOk(false);
     try {
-      await syncCPCB();
-      setSyncOk(true);
-      setTimeout(() => {
-        setSyncOk(false);
-        loadData().catch(() => {});
-      }, 2000);
+      await syncCPCB(); // Dispatches to background thread, returns immediately
+      // Poll /api/aqi/sync/status until done
+      const pollStatus = async () => {
+        const r = await fetch("http://127.0.0.1:8001/api/aqi/sync/status");
+        return r.json();
+      };
+      let attempts = 0;
+      const maxAttempts = 24; // Poll for up to ~2 minutes (every 5s)
+      const poll = setInterval(async () => {
+        try {
+          const status = await pollStatus();
+          attempts++;
+          if (status.status === "completed" || status.status === "failed" || attempts >= maxAttempts) {
+            clearInterval(poll);
+            setSyncing(false);
+            if (status.status === "completed") {
+              setSyncOk(true);
+              setTimeout(() => {
+                setSyncOk(false);
+                loadData().catch(() => {});
+              }, 2000);
+            } else if (status.status === "failed") {
+              setError("Sync failed: " + JSON.stringify(status.last_result));
+            } else {
+              setSyncOk(true); // timeout — treat as partial
+              setTimeout(() => { setSyncOk(false); loadData().catch(() => {}); }, 2000);
+            }
+          }
+        } catch (_) {}
+      }, 5000);
     } catch (err) {
       setError(err.message || "Failed to trigger live update.");
-    } finally {
       setSyncing(false);
     }
   };
@@ -623,7 +646,7 @@ export default function App() {
               <div style={{ flex: 1 }}>
                 {dashboardTab === "analyst" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                    {!intelligence ? (
+                    {!intelligence || !intelligence.intelligence ? (
                       <div className="banner banner-warning">
                         ⚠ Not enough recent observations in the database cache ({stationHistory.length}h of data) to generate a reliable AI analyst report. Require at least 48 hours of observations.
                       </div>
@@ -690,12 +713,12 @@ export default function App() {
                           <div style={{ marginTop: "10px", padding: "12px", background: "rgba(255,255,255,0.01)", border: "1px solid var(--border-soft)", borderRadius: "6px", fontSize: "11.5px", color: "var(--text-2)" }}>
                             <strong>Timeline Insight ({selectedTimelineNode}):</strong>{" "}
                             {selectedTimelineNode === "Now" ? (
-                              <span>Current AQI is {(selectedStation ? selectedStation.aqi : 0).toFixed(0)} ({selectedStation ? selectedStation.category : "N/A"}). Primarily influenced by {intelligence.intelligence.source_attribution.primary.source}.</span>
+                              <span>Current AQI is {selectedStation ? selectedStation.aqi?.toFixed(0) ?? "N/A" : "N/A"} ({selectedStation ? selectedStation.category : "N/A"}). Primarily influenced by {intelligence.intelligence?.source_attribution?.primary?.source ?? "Unknown"}.</span>
                             ) : (
                               <span>
                                 Projected AQI at +{selectedTimelineNode} is expected to reach{" "}
-                                {selectedTimelineNode === "24h" ? intelligence.forecast[0]?.predicted_aqi.toFixed(0) : selectedTimelineNode === "48h" ? intelligence.forecast[1]?.predicted_aqi.toFixed(0) : intelligence.forecast[2]?.predicted_aqi.toFixed(0)}{" "}
-                                ({selectedTimelineNode === "24h" ? intelligence.forecast[0]?.category : selectedTimelineNode === "48h" ? intelligence.forecast[1]?.category : intelligence.forecast[2]?.category}). Risk rating: {intelligence.intelligence.risk_assessment.overall_risk}.
+                                {selectedTimelineNode === "24h" ? intelligence.forecast[0]?.predicted_aqi?.toFixed(0) : selectedTimelineNode === "48h" ? intelligence.forecast[1]?.predicted_aqi?.toFixed(0) : intelligence.forecast[2]?.predicted_aqi?.toFixed(0)}{" "}
+                                ({selectedTimelineNode === "24h" ? intelligence.forecast[0]?.category : selectedTimelineNode === "48h" ? intelligence.forecast[1]?.category : intelligence.forecast[2]?.category}). Risk rating: {intelligence.intelligence?.risk_assessment?.overall_risk ?? "N/A"}.
                               </span>
                             )}
                           </div>

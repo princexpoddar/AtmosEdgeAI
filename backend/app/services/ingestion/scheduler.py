@@ -1,13 +1,34 @@
 import logging
+import time
 from datetime import datetime
-from sqlalchemy.orm import Session
 from backend.app.core.database import SessionLocal, Station
-from backend.app.services.ingestion.cpcb import fetch_cpcb_live_reading
+from backend.app.services.ingestion.cpcb import (
+    fetch_cpcb_live_reading,
+    fetch_city_records_cached,
+    fetch_nationwide_records,
+)
 from backend.app.services.ingestion.openmeteo import fetch_openmeteo_live_weather
 from backend.app.services.ingestion.firms import fetch_upwind_fire_index
 from backend.app.services.ingestion.cache import commit_normalized_observation
 
 logger = logging.getLogger(__name__)
+
+
+def warm_city_cache(stations=None) -> bool:
+    """
+    Pre-warm the government API nationwide cache with a single API call.
+    This loads all 4671+ India station records once, which are then served
+    from in-memory cache for all 40 monitoring stations during sync.
+    Returns True on success.
+    """
+    logger.info("[Cache Warm-up] Fetching nationwide CPCB records...")
+    success = fetch_nationwide_records()
+    if success:
+        logger.info("[Cache Warm-up] Nationwide cache loaded successfully.")
+    else:
+        logger.warning("[Cache Warm-up] Nationwide fetch failed. Sync will use cached defaults.")
+    return success
+
 
 def trigger_hourly_ingestion() -> dict:
     """
@@ -20,12 +41,15 @@ def trigger_hourly_ingestion() -> dict:
     stations = db.query(Station).all()
     print(f"[Ingestion Scheduler] Triggering live sync for {len(stations)} stations at timestamp {now}...")
     
+    # Pre-warm government API cache to avoid per-station concurrent API calls
+    warm_city_cache(stations)
+
     synced_count = 0
     failures = 0
     
     for st in stations:
         try:
-            # 1. Fetch live air quality
+            # 1. Fetch live air quality (reads from warm cache, no new HTTP call)
             aq_data = fetch_cpcb_live_reading(st.id, st.latitude, st.longitude, st.city, st.name)
             
             # 2. Fetch live weather forecast

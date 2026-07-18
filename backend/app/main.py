@@ -1,3 +1,11 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=_env_path, override=True)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.endpoints import router
@@ -52,6 +60,19 @@ def startup_event():
         db.rollback()
     finally:
         db.close()
+
+    # Verify env loaded correctly
+    api_key = os.getenv("DATA_GOV_IN_API_KEY", "")
+    print(f"DATA_GOV_IN_API_KEY loaded: {'YES (len=%d)' % len(api_key) if api_key else 'NO - MISSING'}")
+
+
+@app.get("/api/debug/env")
+def debug_env():
+    return {
+        "DATA_GOV_IN_API_KEY": "SET" if os.getenv("DATA_GOV_IN_API_KEY") else "MISSING",
+        "OPENAQ_API_KEY": "SET" if os.getenv("OPENAQ_API_KEY") else "MISSING",
+        "NASA_FIRMS_MAP_KEY": "SET" if os.getenv("NASA_FIRMS_MAP_KEY") else "MISSING",
+    }
 
 @app.get("/")
 def read_root():
