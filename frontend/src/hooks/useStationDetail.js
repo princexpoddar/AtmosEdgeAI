@@ -6,34 +6,33 @@ import {
 } from "@/services/api";
 
 export function useStationDetail(stationId) {
-  const [history, setHistory] = useState([]);
-  const [forecasts, setForecasts] = useState([]);
+  const [history,      setHistory]      = useState([]);
+  const [forecasts,    setForecasts]    = useState([]);
   const [intelligence, setIntelligence] = useState(null);
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [alerts,       setAlerts]       = useState([]);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState(null);
 
   useEffect(() => {
     if (!stationId) return;
 
-    const controller = new AbortController();
-    const { signal } = controller;
-
+    let cancelled = false;
     setLoading(true);
     setError(null);
 
     Promise.all([
-      getStationHistory(stationId, 3, signal),
-      getStationForecast(stationId, signal),
-      getStationIntelligence(stationId, signal).catch(() => null),
+      getStationHistory(stationId, 3),
+      getStationForecast(stationId),
+      getStationIntelligence(stationId).catch(() => null),
     ])
       .then(([hist, fc, intel]) => {
+        if (cancelled) return;
         setHistory(hist);
         setForecasts(fc);
         setIntelligence(intel);
 
-        // Derive alerts from forecast data
-        const maxFc = Math.max(...fc.map((x) => x.predicted_aqi), 0);
+        // Derive alerts from forecast
+        const maxFc = fc.length > 0 ? Math.max(...fc.map((x) => x.predicted_aqi)) : 0;
         const newAlerts = [];
         if (maxFc > 200) {
           newAlerts.push({
@@ -57,13 +56,15 @@ export function useStationDetail(stationId) {
         setAlerts(newAlerts);
       })
       .catch((err) => {
-        if (err.name !== "AbortError") {
-          setError("Failed to load station details.");
-        }
+        if (cancelled) return;
+        console.error("[useStationDetail] fetch failed:", err);
+        setError("Failed to load station details.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-    return () => controller.abort();
+    return () => { cancelled = true; };
   }, [stationId]);
 
   return { history, forecasts, intelligence, alerts, loading, error };
