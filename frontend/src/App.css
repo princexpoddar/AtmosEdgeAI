@@ -80,7 +80,7 @@
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 1001;
   gap: 16px;
 }
 
@@ -1062,45 +1062,112 @@
 
 .custom-marker-pulsing.active {
   animation: marker-pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  opacity: 0.45;
 }
 
 .custom-marker-pill {
   position: absolute;
   z-index: 2;
-  background: var(--bg-2);
-  border: 1.5px solid;
+  border: 1.5px solid transparent;
   border-radius: 12px;
-  padding: 2px 6px;
+  padding: 2px 7px;
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
   transition: all 0.2s ease-in-out;
+  color: #fff;
 }
 
 .custom-marker-pill.selected {
-  transform: scale(1.22);
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
-  background: var(--bg-3);
+  transform: scale(1.3);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.4), 0 4px 16px rgba(0,0,0,0.5);
 }
 
 @keyframes marker-pulse-ring {
-  0% { transform: scale(0.9); opacity: 0.8; }
-  100% { transform: scale(2.8); opacity: 0; }
+  0%   { transform: scale(0.85); opacity: 0.6; }
+  100% { transform: scale(2.4);  opacity: 0; }
 }
 
 .leaflet-tooltip-card {
   font-family: 'Inter', sans-serif;
   font-size: 11px;
-  color: #fff;
-  background: #0b1220;
-  border: 1px solid #1e2d4a;
+  color: var(--text-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px;
+}
+
+/* ─── Station Detail Header (themed) ─────────────────────────────────── */
+.station-detail-header-card {
+  padding: 20px;
+  margin-bottom: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.station-detail-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0;
+}
+
+.station-detail-location {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.station-detail-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-3);
+  border-radius: 8px;
+}
+
+.station-detail-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.station-detail-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.station-detail-value {
+  font-size: 14px;
+  color: var(--text-1);
+  font-weight: 700;
+}
+
+.station-detail-unit {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.station-detail-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-3);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 10px;
 }
 
 /* ─── Alert drawer ────────────────────────────────────────────────────── */
@@ -1109,8 +1176,8 @@
   top: 70px;
   right: 20px;
   width: 320px;
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid #1e2d4a;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
   box-shadow: var(--shadow-lg);
@@ -1309,10 +1376,12 @@
 }
 
 .map-card {
-  flex: 1.2;
-  min-height: 440px;
+  height: 480px;
+  min-height: 480px;
   overflow: hidden;
   position: relative;
+  isolation: isolate;
+  flex-shrink: 0;
 }
 
 .map-layer-controls {
@@ -1356,7 +1425,7 @@
 .station-dir-list {
   flex: 1;
   overflow-y: auto;
-  max-height: 250px;
+  max-height: 660px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1647,12 +1716,20 @@
   display: grid;
   grid-template-columns: 1.2fr 2fr;
   gap: 20px;
+  align-items: start;
 }
 
 .enforcement-left-col {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.enforcement-left-col > .card:first-child {
+  max-height: 750px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .enforcement-right-col {
@@ -1673,6 +1750,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .priority-ward-row {
@@ -1917,6 +1997,11 @@
   -webkit-text-fill-color: transparent;
 }
 
+[data-theme="light"] .landing-headline {
+  -webkit-text-fill-color: var(--text-1);
+  background: none;
+}
+
 .landing-subtext {
   font-size: 15px;
   color: var(--text-2);
@@ -1946,8 +2031,8 @@
 .aqi-hero-card {
   width: 100%;
   max-width: 360px;
-  background: linear-gradient(135deg, rgba(15,23,42,0.7) 0%, rgba(3,7,18,0.7) 100%);
-  border: 1px solid #1e2d4a;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 24px;
   box-shadow: var(--shadow-lg);
@@ -2033,8 +2118,8 @@
 }
 
 .feature-card {
-  background: rgba(15,23,42,0.4);
-  border: 1px solid #1e2d4a;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -2067,8 +2152,8 @@
 }
 
 .landing-benchmarks {
-  background: rgba(15,23,42,0.55);
-  border: 1px solid #1e2d4a;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 30px;
   display: grid;
@@ -2159,7 +2244,7 @@
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  background: rgba(15,23,42,0.55);
+  background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
@@ -2209,7 +2294,7 @@
 
 .predictor-result {
   margin-top: 24px;
-  background: #080d16;
+  background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 18px;
@@ -2288,7 +2373,7 @@
 }
 
 .comparison-table {
-  background: rgba(0,0,0,0.12);
+  background: var(--bg-3);
   border: 1px solid var(--border-soft);
   border-radius: 8px;
   overflow: hidden;
@@ -2298,7 +2383,7 @@
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
   border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,0.02);
+  background: var(--bg-4);
   padding: 10px 14px;
   font-size: 11px;
   font-weight: bold;
@@ -2344,10 +2429,10 @@
 }
 
 .analytics-tab-btn.active   { background: #3b82f6; border-color: #3b82f6; }
-.analytics-tab-btn.inactive { background: rgba(255,255,255,0.02); }
+.analytics-tab-btn.inactive { background: var(--bg-3); color: var(--text-1); }
 
 .analytics-chart-box {
-  background: rgba(0,0,0,0.2);
+  background: var(--bg-3);
   border-radius: 8px;
   padding: 16px;
   border: 1px solid var(--border-soft);
@@ -2451,7 +2536,7 @@
 
 .shap-bar-track {
   height: 6px;
-  background: rgba(255,255,255,0.03);
+  background: var(--bg-4);
   border-radius: 3px;
   overflow: hidden;
   position: relative;
@@ -2478,7 +2563,7 @@
   top: 0;
   width: 1px;
   height: 100%;
-  background: rgba(255,255,255,0.2);
+  background: var(--border);
 }
 
 .fi-list {
@@ -2506,7 +2591,7 @@
 .fi-bar-track {
   flex: 1;
   height: 6px;
-  background: rgba(255,255,255,0.03);
+  background: var(--bg-4);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -2574,20 +2659,25 @@
 .map-container {
   width: 100%;
   height: 100%;
+  background: #1a1a2e;
+}
+
+[data-theme="light"] .map-container {
+  background: #d4dadc;
 }
 
 .map-skeleton {
   width: 100%;
   height: 100%;
-  min-height: 440px;
+  min-height: 480px;
 }
 
 /* ─── Map root wrapper ───────────────────────────────────────────────── */
 .map-root {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 440px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

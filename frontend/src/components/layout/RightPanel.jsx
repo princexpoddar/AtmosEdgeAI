@@ -65,7 +65,7 @@ function ForecastCards({ forecasts }) {
 function StationDetailHeader({ station, loading }) {
   if (loading) {
     return (
-      <div className="card" style={{ padding: "20px", marginBottom: "16px" }}>
+      <div className="card station-detail-header-card">
         <Skeleton height="80px" />
       </div>
     );
@@ -73,7 +73,7 @@ function StationDetailHeader({ station, loading }) {
 
   if (!station) {
     return (
-      <div className="card" style={{ padding: "20px", marginBottom: "16px", textAlign: "center", color: "#64748b" }}>
+      <div className="card station-detail-header-card" style={{ textAlign: "center", color: "var(--text-3)" }}>
         No station selected. Choose a station from the directory or map.
       </div>
     );
@@ -113,20 +113,11 @@ function StationDetailHeader({ station, loading }) {
   const aqiSlug = getAqiSlug(station.aqi);
 
   return (
-    <div
-      className="card station-detail-header-card"
-      style={{
-        padding: "20px",
-        marginBottom: "16px",
-        background: "rgba(17, 24, 39, 0.7)",
-        backdropFilter: "blur(12px)",
-        border: "1px solid rgba(255, 255, 255, 0.05)"
-      }}
-    >
+    <div className="card station-detail-header-card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
         <div>
-          <h2 style={{ fontSize: "20px", fontWeight: "700", color: "#f8fafc", margin: 0 }}>{station.name}</h2>
-          <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px", margin: 0 }}>
+          <h2 className="station-detail-name">{station.name}</h2>
+          <p className="station-detail-location">
             {station.city}, {station.state} &bull; Elevation: {fmt(station.elevation, 0)}m
           </p>
         </div>
@@ -160,45 +151,45 @@ function StationDetailHeader({ station, loading }) {
             <span className={`forecast-aqi-cat aqitxt-${aqiSlug}`} style={{ fontSize: "12px", fontWeight: "600", display: "block" }}>
               {station.category}
             </span>
-            <span style={{ fontSize: "24px", fontWeight: "800", color: "#f8fafc", lineHeight: "1" }}>
-              {station.aqi.toFixed(0)} <span style={{ fontSize: "12px", fontWeight: "500", color: "#64748b" }}>AQI</span>
+            <span className="station-detail-value" style={{ fontSize: "24px", fontWeight: "800", lineHeight: "1" }}>
+              {station.aqi.toFixed(0)} <span className="station-detail-unit" style={{ fontSize: "12px" }}>AQI</span>
             </span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "12px", padding: "12px", background: "rgba(15, 23, 42, 0.4)", borderRadius: "8px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>PM2.5</span>
-          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.pm25)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>µg/m³</span></strong>
+      <div className="station-detail-metrics-grid">
+        <div className="station-detail-metric-item">
+          <span className="station-detail-label">PM2.5</span>
+          <strong className="station-detail-value">{fmt(station.pm25)} <span className="station-detail-unit">µg/m³</span></strong>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>NO₂</span>
-          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.no2)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>µg/m³</span></strong>
+        <div className="station-detail-metric-item">
+          <span className="station-detail-label">NO₂</span>
+          <strong className="station-detail-value">{fmt(station.no2)} <span className="station-detail-unit">µg/m³</span></strong>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Temperature</span>
-          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.temp)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>°C</span></strong>
+        <div className="station-detail-metric-item">
+          <span className="station-detail-label">Temperature</span>
+          <strong className="station-detail-value">{fmt(station.temp)} <span className="station-detail-unit">°C</span></strong>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Humidity</span>
-          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.humidity, 0)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>%</span></strong>
+        <div className="station-detail-metric-item">
+          <span className="station-detail-label">Humidity</span>
+          <strong className="station-detail-value">{fmt(station.humidity, 0)} <span className="station-detail-unit">%</span></strong>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <span style={{ fontSize: "10px", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Wind Speed</span>
-          <strong style={{ fontSize: "14px", color: "#f1f5f9" }}>{fmt(station.wind_speed)} <span style={{ fontSize: "10px", fontWeight: "normal", color: "#94a3b8" }}>km/h</span></strong>
+        <div className="station-detail-metric-item">
+          <span className="station-detail-label">Wind Speed</span>
+          <strong className="station-detail-value">{fmt(station.wind_speed)} <span className="station-detail-unit">km/h</span></strong>
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", fontSize: "11px", color: "#64748b", borderTop: "1px solid rgba(255,255,255,0.03)", paddingTop: "10px" }}>
+      <div className="station-detail-footer">
         <div>
-          <span>Source: <strong style={{ color: "#94a3b8" }}>{station.source || "Unknown"}</strong></span>
+          <span>Source: <strong style={{ color: "var(--text-2)" }}>{station.source || "Unknown"}</strong></span>
           <span style={{ margin: "0 8px" }}>&bull;</span>
-          <span>Provider: <strong style={{ color: "#94a3b8" }}>{station.provider || "Unknown"}</strong></span>
+          <span>Provider: <strong style={{ color: "var(--text-2)" }}>{station.provider || "Unknown"}</strong></span>
         </div>
         {station.last_updated && (
           <div>
-            <span>Updated: <strong style={{ color: "#94a3b8" }}>{station.last_updated}</strong> ({station.data_age_minutes || 0}m ago)</span>
+            <span>Updated: <strong style={{ color: "var(--text-2)" }}>{station.last_updated}</strong> ({station.data_age_minutes || 0}m ago)</span>
           </div>
         )}
       </div>

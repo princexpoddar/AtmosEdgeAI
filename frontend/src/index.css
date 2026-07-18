@@ -6,8 +6,8 @@
 
 body {
   margin: 0;
-  background: #000000;
-  color: #e6edf3;
+  background: var(--bg);
+  color: var(--text-1);
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

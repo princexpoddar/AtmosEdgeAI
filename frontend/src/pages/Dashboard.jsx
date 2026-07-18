@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useStations } from "@/hooks/useStations";
 import { useStationDetail } from "@/hooks/useStationDetail";
 import { useSync } from "@/hooks/useSync";
+import { useTheme } from "@/context/useTheme";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
 import RightPanel from "@/components/layout/RightPanel";
@@ -11,6 +12,7 @@ import Banner from "@/components/ui/Banner";
 
 export default function Dashboard() {
   const location = useLocation();
+  const { theme } = useTheme();
   const [selectedStationId, setSelectedStationId] = useState("");
   const [activeMapLayer, setActiveMapLayer] = useState("aqi");
   const [showAlertPanel, setShowAlertPanel] = useState(false);
@@ -85,6 +87,7 @@ export default function Dashboard() {
               selectedStationId={selectedStationId}
               onSelectStation={setSelectedStationId}
               activeLayer={activeMapLayer}
+              theme={theme}
             />
           </div>
 

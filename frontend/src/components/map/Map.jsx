@@ -20,7 +20,7 @@ function buildIcon(station, isSelected) {
     className: "custom-map-marker-container",
     html: `
       <div class="custom-marker-pulsing${isSelected ? " active" : ""}" style="background-color:${color}"></div>
-      <div class="custom-marker-pill${isSelected ? " selected" : ""}" style="border-color:${color};color:${color}">
+      <div class="custom-marker-pill${isSelected ? " selected" : ""}" style="background-color:${color};border-color:${color}">
         <span>${Math.round(station.aqi)}</span>
       </div>
     `,
@@ -146,7 +146,7 @@ export default function Map({ stations, selectedStationId, onSelectStation, them
         zoom={5}
         zoomControl={false}
         className="map-container"
-        style={{ width: "100%", height: "100%", minHeight: "440px" }}
+        style={{ width: "100%", height: "100%" }}
       >
         <TileTheme theme={theme} />
         <MarkerLayer
