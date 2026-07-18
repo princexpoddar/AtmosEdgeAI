@@ -18,6 +18,14 @@ _CACHE_TTL_MINUTES = 60
 _RESOURCE_ID = "3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"
 _GOV_API_LIMIT = 5000   # fetch up to 5000 records in one call
 
+# data.gov.in blocks Python's default User-Agent. Use a browser UA to get responses.
+_BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive",
+}
+
 # Global thread pool executor for parallel fetching
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
@@ -124,12 +132,14 @@ def fetch_nationwide_records() -> bool:
     t0 = time.time()
     for attempt in range(3):  # retry transient failures up to 3 times
         try:
-            r = requests.get(url, timeout=30)
+            # Use browser UA: api.data.gov.in blocks Python's default 'python-requests' UA.
+            # With browser UA it responds in ~1-2s vs timing out with default UA.
+            r = requests.get(url, timeout=30, headers=_BROWSER_HEADERS)
             latency = time.time() - t0
             if r.status_code == 200:
                 records = r.json().get("records", [])
-                logger.info(f"[Gov API] Nationwide fetch returned {len(records)} records on attempt {attempt+1}.")
-                
+                logger.info(f"[Gov API] Nationwide fetch returned {len(records)} records on attempt {attempt+1} in {latency:.1f}s.")
+
                 # Group by city
                 by_city: Dict[str, List[Dict[str, Any]]] = {}
                 for rec in records:
@@ -148,8 +158,8 @@ def fetch_nationwide_records() -> bool:
             logger.warning(f"[Gov API] Ingestion attempt {attempt+1} failed: {e}")
             if attempt == 2:
                 _update_provider_health("DATA_GOV_IN", success=False, latency=latency, error_msg=str(e))
-            time.sleep(1.0)
-            
+            time.sleep(2.0)  # backoff before retry
+
     return False
 
 def fetch_city_records_cached(city: str) -> List[Dict[str, Any]]:
@@ -195,7 +205,8 @@ def fetch_data_gov_in_fallback(city: str, station_name: str) -> Dict[str, Option
     for rec in target_records:
         p_id = rec.get("pollutant_id", "").upper()
         try:
-            val = float(rec.get("pollutant_avg", 0))
+            # API returns JSON with key 'avg_value' (the field 'id'), not 'pollutant_avg' (the field 'name')
+            val = float(rec.get("avg_value", rec.get("pollutant_avg", 0)))
             if p_id == "PM2.5" and val >= 0:
                 pm25_vals.append(val)
             elif p_id == "NO2" and val >= 0:
