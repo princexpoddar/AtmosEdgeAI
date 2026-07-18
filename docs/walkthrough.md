@@ -57,7 +57,13 @@ We have performed a complete production-grade cleanup of the AtmosEdgeAI reposit
 * **Production Logging**: Replaced development `print()` statements with structured Python logging.
 * **Seeding Isolation**: Moved DB seeding to a dedicated helper function `_seed_initial_data()`.
 
+### Frontend Page Navigation & Auto-Populate Fixes
+* **Enforcement Page Navigation**: Wrapped [Enforcement.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/pages/Enforcement.jsx) in the `app-root` class wrapper and rendered `<Navbar />` at the top of all return states (loading, error, and main content) to ensure the navbar is always visible and functional.
+* **Timeline Compilation Fix**: Resolved a missing closing `</div>` tag at the bottom of [Enforcement.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/pages/Enforcement.jsx) that was causing an unexpected token parsing error during Vite build.
+* **Predictor Dropdown Auto-Populate**: Updated [Predictor.jsx](file:///c:/Users/praba/OneDrive/Desktop/AtmosEdgeAI/frontend/src/pages/Predictor.jsx) to import and call the `useStations()` hook directly as a fallback, dynamically fetching and populating the dropdown listing of stations when no explicit props are provided by the App router context.
+
 ---
+
 
 ## 3. Dependency & Configuration Check
 
