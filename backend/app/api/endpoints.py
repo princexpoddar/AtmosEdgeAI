@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import json
@@ -556,3 +558,118 @@ def sync_aqi_database():
     from backend.app.services.ingestion.scheduler import trigger_hourly_ingestion
     result = trigger_hourly_ingestion()
     return result
+
+@router.get("/v1/intelligence/{station_id}")
+def get_station_intelligence(station_id: str, db: Session = Depends(get_db)):
+    """
+    GET /v1/intelligence/{station_id}
+    Retrieves history and forecasts, sets up the immutable shared context, and runs
+    the reasoning, attribution, risk, confidence, decision, and report engine pipeline.
+    """
+    station = db.query(Station).filter(Station.id == station_id).first()
+    if not station:
+        raise HTTPException(status_code=404, detail="Station not found")
+        
+    readings = retrieve_station_lag_history(db, station_id, 100)
+    if len(readings) < 48:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "status": "insufficient_data",
+                "message": "Not enough recent observations to generate an intelligence report."
+            }
+        )
+        
+    try:
+        data = [{
+            "timestamp": r.timestamp,
+            "pm25": r.pm25 if r.pm25 is not None else 80.0,
+            "no2": r.no2 if r.no2 is not None else 30.0,
+            "temp": r.temp if r.temp is not None else 25.0,
+            "humidity": r.humidity if r.humidity is not None else 60.0,
+            "wind_speed": r.wind_speed if r.wind_speed is not None else 10.0,
+            "wind_deg": r.wind_deg if r.wind_deg is not None else 180.0,
+            "upwind_fire_intensity": r.upwind_fire_intensity if r.upwind_fire_intensity is not None else 0.0,
+            "upwind_fire_count": r.upwind_fire_count if r.upwind_fire_count is not None else 0,
+            "stagnation": r.stagnation if r.stagnation is not None else 0.5
+        } for r in readings]
+        
+        df = pd.DataFrame(data)
+        df.set_index("timestamp", inplace=True)
+        
+        # Retrieve existing forecast records (reuses forecasting engine cleanly)
+        forecast_records = get_station_forecast(station_id, db)
+        
+        latest = readings[-1]
+        pm25 = latest.pm25 if (latest and latest.pm25 is not None) else 80.0
+        no2 = latest.no2 if (latest and latest.no2 is not None) else 30.0
+        
+        current_weather = {
+            "temperature": latest.temp if latest.temp is not None else 25.0,
+            "humidity": latest.humidity if latest.humidity is not None else 60.0,
+            "wind_speed": latest.wind_speed if latest.wind_speed is not None else 10.0,
+            "wind_direction": latest.wind_deg if latest.wind_deg is not None else 180.0
+        }
+        
+        fire_index = {
+            "upwind_fire_intensity": latest.upwind_fire_intensity if latest.upwind_fire_intensity is not None else 0.0,
+            "upwind_fire_count": latest.upwind_fire_count if latest.upwind_fire_count is not None else 0
+        }
+        
+        from backend.app.services.intelligence.context import IntelligenceContext
+        context = IntelligenceContext(
+            station=station,
+            latest_reading=latest,
+            history_df=df,
+            forecasts=forecast_records,
+            current_weather=current_weather,
+            fire_index=fire_index
+        )
+        
+        from backend.app.services.intelligence import reasoning_engine, source_attribution, confidence, risk_assessment, decision_engine, report_generator
+        
+        engine = reasoning_engine.RuleBasedReasoningEngine()
+        reasoning_res = engine.analyze(context)
+        source_res = source_attribution.analyze(context)
+        confidence_res = confidence.analyze(context)
+        risk_res = risk_assessment.analyze(context)
+        decision_res = decision_engine.analyze(context, risk_res, source_res)
+        report_res = report_generator.analyze(context, reasoning_res, source_res, risk_res, decision_res)
+        
+        return {
+            "forecast": forecast_records,
+            "intelligence": {
+                "source_attribution": source_res,
+                "risk_assessment": risk_res,
+                "confidence": confidence_res,
+                "reasoning": reasoning_res,
+                "decision": decision_res,
+                "report": report_res,
+                "municipal_actions": [a["action"] for a in decision_res.get("actions", [])],
+                "citizen_actions": decision_res.get("citizen_actions", [])
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to generate intelligence context: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Intelligence pipeline error: {str(e)}"
+        )
+
+@router.get("/v1/enforcement")
+def get_municipal_enforcement_dashboard(db: Session = Depends(get_db)):
+    """
+    GET /v1/enforcement
+    Orchestrates high-impact hotspot audits, resource scheduling, and enforcement briefs.
+    """
+    try:
+        from backend.app.services.enforcement.pipeline import run_enforcement_pipeline
+        payload = run_enforcement_pipeline(db)
+        return payload
+    except Exception as e:
+        logger.error(f"Enforcement dashboard resolution failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Enforcement Engine pipeline failure: {str(e)}"
+        )

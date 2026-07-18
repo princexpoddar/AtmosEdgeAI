@@ -58,3 +58,15 @@ export async function syncCPCB() {
   if (!r.ok) throw new Error("Failed database sync");
   return r.json();
 }
+
+export async function getStationIntelligence(id) {
+  const r = await fetch(`${API_BASE}/v1/intelligence/${id}`);
+  if (!r.ok) throw new Error("Failed to load AI intelligence reports");
+  return r.json();
+}
+
+export async function getEnforcementDashboard() {
+  const r = await fetch(`${API_BASE}/v1/enforcement`);
+  if (!r.ok) throw new Error("Failed to load enforcement dashboard");
+  return r.json();
+}

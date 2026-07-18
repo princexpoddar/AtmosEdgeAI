@@ -26,7 +26,7 @@ def trigger_hourly_ingestion() -> dict:
     for st in stations:
         try:
             # 1. Fetch live air quality
-            aq_data = fetch_cpcb_live_reading(st.id, st.latitude, st.longitude)
+            aq_data = fetch_cpcb_live_reading(st.id, st.latitude, st.longitude, st.city, st.name)
             
             # 2. Fetch live weather forecast
             weather = fetch_openmeteo_live_weather(st.latitude, st.longitude)
