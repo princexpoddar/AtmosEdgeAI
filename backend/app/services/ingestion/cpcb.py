@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 _national_cache: Dict[str, List[Dict[str, Any]]] = {}   # city -> records
 _national_cache_time: Optional[datetime] = None
 _CACHE_TTL_MINUTES = 60
-_RESOURCE_ID = "3b01bcb8-0b15-492c-b6f1-5fc5d0ab03db"
+_RESOURCE_ID = "3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"
 _GOV_API_LIMIT = 5000   # fetch up to 5000 records in one call
 
 # Global thread pool executor for parallel fetching
