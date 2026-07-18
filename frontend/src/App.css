@@ -1,6 +1,6 @@
 /* Fonts are imported via @fontsource npm packages in main.jsx */
 
-/* ─── Design Tokens ─────────────────────────────────────────────────── */
+/* ─── Design Tokens (Dark mode — default) ──────────────────────── */
 :root {
   --bg:          #000000;
   --bg-2:        #0a0a0a;
@@ -30,6 +30,35 @@
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.4);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.5);
   --shadow-lg:   0 8px 24px rgba(0,0,0,0.6);
+}
+
+/* ─── Light Mode Overrides ───────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:          #f6f8fa;
+  --bg-2:        #ffffff;
+  --bg-3:        #f0f2f5;
+  --bg-4:        #e8eaed;
+  --border:      #d0d7de;
+  --border-soft: #e8eaed;
+  --text-1:      #1f2328;
+  --text-2:      #57606a;
+  --text-3:      #6e7781;
+  --accent:      #0969da;
+  --accent-dim:  rgba(9,105,218,0.10);
+  --accent-glow: rgba(9,105,218,0.20);
+  --green:       #1a7f37;
+  --green-dim:   rgba(26,127,55,0.10);
+  --yellow:      #9a6700;
+  --yellow-dim:  rgba(154,103,0,0.10);
+  --orange:      #bc4c00;
+  --orange-dim:  rgba(188,76,0,0.10);
+  --red:         #cf222e;
+  --red-dim:     rgba(207,34,46,0.10);
+  --purple:      #8250df;
+  --purple-dim:  rgba(130,80,223,0.10);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.10);
+  --shadow-lg:   0 8px 24px rgba(0,0,0,0.12);
 }
 
 /* ─── Layout Shell ───────────────────────────────────────────────────── */
@@ -2560,3 +2589,595 @@
   height: 100%;
   min-height: 440px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PREDICTOR PAGE
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Page shell ─────────────────────────────────────────────────── */
+.pred-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px 32px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────── */
+.pred-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.pred-header-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.pred-header-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+
+.pred-header-sub {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 0;
+  max-width: 560px;
+  line-height: 1.5;
+}
+
+/* ─── Live station reading pill ──────────────────────────────────── */
+.pred-live-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 18px;
+  flex-shrink: 0;
+}
+
+.pred-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-dim);
+  animation: pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.pred-live-station {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 2px;
+}
+
+.pred-live-reading {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* ─── Main grid ──────────────────────────────────────────────────── */
+.pred-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .pred-grid { grid-template-columns: 1fr; }
+}
+
+/* ─── Left column ────────────────────────────────────────────────── */
+.pred-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ─── Config card ────────────────────────────────────────────────── */
+.pred-config-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pred-config-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.pred-config-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.pred-config-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0 0 4px 0;
+}
+
+.pred-config-sub {
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 0;
+}
+
+.pred-error-banner {
+  padding: 10px 14px;
+  background: var(--red-dim);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-md);
+  color: var(--red);
+  font-size: 13px;
+}
+
+.pred-stations-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.pred-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+}
+
+.pred-empty-icon { font-size: 36px; }
+
+.pred-empty-state p {
+  color: var(--text-2);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ─── Form ───────────────────────────────────────────────────────── */
+.pred-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pred-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pred-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+
+/* Station select */
+.pred-select-wrap {
+  position: relative;
+}
+
+.pred-select {
+  width: 100%;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-1);
+  padding: 10px 36px 10px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.pred-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.pred-select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+  font-size: 12px;
+}
+
+/* Horizon buttons */
+.pred-horizon-group {
+  display: flex;
+  gap: 10px;
+}
+
+.pred-horizon-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-2);
+  font-family: inherit;
+}
+
+.pred-horizon-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-1);
+}
+
+.pred-horizon-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pred-horizon-sub {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+/* Submit button */
+.pred-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+}
+
+.pred-submit:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--accent-glow);
+}
+
+.pred-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.pred-submit-icon { font-size: 16px; }
+
+/* ─── Result card ────────────────────────────────────────────────── */
+.pred-result-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pred-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pred-result-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.pred-result-station {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.pred-category-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pred-result-body {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  align-items: center;
+}
+
+/* Gauge */
+.pred-gauge-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.gauge-svg { overflow: visible; }
+
+.pred-gauge-label {
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Pollutant bars */
+.pred-pollutants-col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pred-pollutant-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pred-poll-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.pred-poll-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pred-poll-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pred-poll-unit {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.pred-poll-track {
+  position: relative;
+  height: 8px;
+  background: var(--bg-4);
+  border-radius: 8px;
+  overflow: visible;
+}
+
+.pred-poll-fill {
+  height: 100%;
+  border-radius: 8px;
+}
+
+.pred-poll-marker {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 16px;
+  background: var(--yellow);
+  border-radius: 2px;
+}
+
+.pred-poll-marker-cpcb {
+  background: var(--orange);
+}
+
+.pred-poll-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.pred-poll-who-label  { color: var(--yellow); }
+.pred-poll-cpcb-label { color: var(--orange); }
+
+/* Advisory */
+.pred-advisory {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+}
+
+.pred-advisory-icon { font-size: 16px; flex-shrink: 0; }
+
+.pred-advisory p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* ─── Right column cards ─────────────────────────────────────────── */
+.pred-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pred-info-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
+
+.pred-info-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  margin: 0 0 14px 0;
+}
+
+.pred-info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pred-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.pred-info-row:last-child { border-bottom: none; }
+
+.pred-info-key {
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.pred-info-val {
+  font-size: 11px;
+  color: var(--text-1);
+  text-align: right;
+}
+
+/* AQI scale */
+.pred-aqi-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pred-scale-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+
+.pred-scale-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pred-scale-label {
+  font-size: 12px;
+  color: var(--text-1);
+  flex: 1;
+}
+
+.pred-scale-range {
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pipeline */
+.pred-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pred-pipeline-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--bg-3);
+  border-radius: var(--radius-sm);
+}
+
+.pred-pipeline-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.pred-pipeline-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.pred-pipeline-sub {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
