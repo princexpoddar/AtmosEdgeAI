@@ -1,7 +1,15 @@
+import os
 import requests
+from dotenv import load_dotenv
 
-API_KEY = "your_api_key_here"
-RESOURCE_ID = "3b01bcb8-0b15-492c-b6f1-5fc5d0ab03db" # Real-time Air Quality Index Resource ID
+# Load env variables from root/parent directory if present
+load_dotenv()
+
+API_KEY = os.getenv("DATA_GOV_IN_API_KEY")
+if not API_KEY:
+    raise ValueError("DATA_GOV_IN_API_KEY environment variable is not set. Please define it in your .env file.")
+
+RESOURCE_ID = "3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69" # Real-time Air Quality Index Resource ID
 URL = f"https://api.data.gov.in/resource/{RESOURCE_ID}?api-key={API_KEY}&format=json&limit=5"
 
 try:
