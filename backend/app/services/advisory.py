@@ -360,7 +360,7 @@ CRITICAL INSTRUCTIONS:
 """
         import requests
 
-        for model_name in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+        for model_name in ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-3.5-flash"]:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key_to_use}"
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": prompt}]}]}
