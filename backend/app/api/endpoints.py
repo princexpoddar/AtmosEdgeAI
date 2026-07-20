@@ -528,20 +528,65 @@ def get_station_intelligence(
 
 @router.get("/v1/enforcement", summary="Municipal enforcement dashboard — priority rankings and actions")
 def get_municipal_enforcement_dashboard(
+    station_id: Optional[str] = None,
+    city: Optional[str] = None,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
-    Orchestrates high-impact hotspot audits, resource scheduling, and enforcement briefs
-    across all active monitoring stations.
+    Orchestrates high-impact hotspot audits, station-specific dossiers, resource scheduling,
+    and targeted enforcement directives across all or specific monitoring stations.
     """
     try:
         from backend.app.services.enforcement.pipeline import run_enforcement_pipeline
-        return run_enforcement_pipeline(db)
+        return run_enforcement_pipeline(db, station_id=station_id, city=city)
     except Exception as e:
         logger.error("Enforcement dashboard failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Enforcement pipeline error: {e}",
+        )
+
+
+# ── Multi-City Comparative Intelligence ───────────────────────────────────────
+
+@router.get("/v1/comparative", summary="Multi-city comparative air quality analytics and NCAP benchmarks")
+def get_multi_city_comparative_analytics(
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Evaluates real-time air quality metrics, NCAP targets, and cross-city intervention benchmarks.
+    """
+    try:
+        from backend.app.services.intelligence.comparative import generate_comparative_analytics
+        return generate_comparative_analytics(db)
+    except Exception as e:
+        logger.error("Comparative analytics failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Comparative analytics error: {e}",
+        )
+
+
+# ── Multi-Lingual Regional Health Advisory ────────────────────────────────────
+
+@router.get("/v1/advisories", summary="Station-level multi-lingual citizen health risk advisory")
+def get_station_regional_advisory(
+    station_id: str,
+    lang: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Generates ward/station level health risk advisories mapping population vulnerability
+    against forecast AQI in regional languages (Kannada, Tamil, Hindi, Marathi, Bengali).
+    """
+    try:
+        from backend.app.services.advisory import generate_regional_advisory
+        return generate_regional_advisory(station_id=station_id, lang=lang, db=db)
+    except Exception as e:
+        logger.error("Regional advisory generation failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Regional advisory error: {e}",
         )
 
 

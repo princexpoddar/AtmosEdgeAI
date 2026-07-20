@@ -58,8 +58,23 @@ export async function getStationIntelligence(id) {
   return apiFetch(`${API_BASE}/v1/intelligence/${id}`);
 }
 
-export async function getEnforcementDashboard() {
-  return apiFetch(`${API_BASE}/v1/enforcement`);
+export async function getEnforcementDashboard(stationId = null, city = null) {
+  let url = `${API_BASE}/v1/enforcement`;
+  const params = new URLSearchParams();
+  if (stationId) params.append("station_id", stationId);
+  if (city) params.append("city", city);
+  if (params.toString()) url += `?${params.toString()}`;
+  return apiFetch(url);
+}
+
+export async function getComparativeAnalytics() {
+  return apiFetch(`${API_BASE}/v1/comparative`);
+}
+
+export async function getRegionalAdvisory(stationId, lang = null) {
+  let url = `${API_BASE}/v1/advisories?station_id=${stationId}`;
+  if (lang) url += `&lang=${lang}`;
+  return apiFetch(url);
 }
 
 export async function getProviderDiagnostics() {

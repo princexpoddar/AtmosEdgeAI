@@ -143,20 +143,22 @@ def _build_forecast(
         return _fallback_forecast(base_pm25, base_no2)
 
 
+from backend.app.services.enforcement.station_profiles import get_station_profile
+
 # ── Main pipeline ─────────────────────────────────────────────────────────────
 
-def run_enforcement_pipeline(db: Session) -> dict:
+def run_enforcement_pipeline(db: Session, station_id: Optional[str] = None, city: Optional[str] = None) -> dict:
     """
     Orchestrates the municipal enforcement pipeline.
 
     Optimised: single station-list fetch, single readings fetch per station,
-    inline ML inference, and a 5-minute result cache.
+    inline ML inference, station land-use dossier integration, and a 5-minute result cache.
     """
     global _cache_payload, _cache_expires_at
 
-    # ── Cache hit ──────────────────────────────────────────────────────────────
+    # ── Cache hit (only for global unfiltered calls) ─────────────────────────
     now = time.monotonic()
-    if _cache_payload is not None and now < _cache_expires_at:
+    if station_id is None and city is None and _cache_payload is not None and now < _cache_expires_at:
         logger.info("Enforcement pipeline: returning cached result (%.0fs remaining)",
                     _cache_expires_at - now)
         return _cache_payload
@@ -165,8 +167,15 @@ def run_enforcement_pipeline(db: Session) -> dict:
     t_start = time.monotonic()
 
     # ── Fetch all stations ONCE ────────────────────────────────────────────────
-    stations = db.query(Station).all()
-    cities   = sorted({st.city for st in stations if st.city})
+    query = db.query(Station)
+    if station_id:
+        query = query.filter(Station.id == str(station_id))
+    elif city:
+        query = query.filter(Station.city == str(city))
+
+    stations = query.all()
+    all_stations_db = db.query(Station).all()
+    cities   = sorted({st.city for st in all_stations_db if st.city})
     city_idx = {c: i for i, c in enumerate(cities)}
 
     # ── Per-station processing ─────────────────────────────────────────────────
@@ -221,6 +230,9 @@ def run_enforcement_pipeline(db: Session) -> dict:
             pm25_recent = df["pm25"].tail(24).values
             trend_delta = float(pm25_recent[-1] - pm25_recent[0]) if len(pm25_recent) >= 24 else 0.0
 
+            # Station Dossier Profile
+            st_profile = get_station_profile(st.id, st.name, st.city, st.state or "")
+
             enforce_ctx = EnforcementContext(
                 station_id=st.id,
                 station_name=st.name,
@@ -234,6 +246,7 @@ def run_enforcement_pipeline(db: Session) -> dict:
                 municipal_recommendations=decision_res.get("citizen_actions", []),
                 weather=current_weather,
                 history_trend={"delta_24h": trend_delta},
+                profile=st_profile,
             )
             station_contexts.append(enforce_ctx)
 
@@ -254,16 +267,21 @@ def run_enforcement_pipeline(db: Session) -> dict:
         alloc_res    = resource_allocator.analyze(ctx, priority_res)
 
         priority_list.append({
-            "station_id":   ctx.station_id,
-            "station_name": ctx.station_name,
-            "city":         ctx.city,
-            "priority":     priority_res["priority"],
-            "score":        priority_res["priority_score"],
-            "reasoning":    priority_res["reasoning"],
-            "trend_delta":  ctx.history_trend.get("delta_24h", 0.0),
-            "current_aqi":  calculate_pm25_aqi(
+            "station_id":          ctx.station_id,
+            "station_name":        ctx.station_name,
+            "city":                ctx.city,
+            "priority":            priority_res["priority"],
+            "score":               priority_res["priority_score"],
+            "reasoning":           priority_res["reasoning"],
+            "trend_delta":         ctx.history_trend.get("delta_24h", 0.0),
+            "current_aqi":         calculate_pm25_aqi(
                 ctx.forecast[0]["predicted_pm25"] if ctx.forecast else 80.0
             ),
+            "land_use":            ctx.profile.get("land_use", "Urban Corridor"),
+            "zone_type":           ctx.profile.get("zone_type", "Residential/Commercial"),
+            "spcb_authority":      ctx.profile.get("spcb_authority", "SPCB"),
+            "registered_hotspots": ctx.profile.get("registered_hotspots", []),
+            "receptors":           ctx.profile.get("receptors", {}),
         })
 
         for insp in insp_res:
@@ -300,6 +318,8 @@ def run_enforcement_pipeline(db: Session) -> dict:
             "timestamp":                datetime.utcnow().isoformat(),
             "total_stations_evaluated": len(priority_list),
             "compute_time_seconds":     round(elapsed, 2),
+            "filter_station_id":        station_id,
+            "filter_city":              city,
         },
         "priority_rankings":           priority_list,
         "hotspots": {
@@ -317,15 +337,16 @@ def run_enforcement_pipeline(db: Session) -> dict:
             "critical_count":   critical_count,
             "high_count":       high_count,
             "direct_orders": (
-                "Deploy sweepers and restrict commercial diesel vehicles along the Peenya industrial corridors."
-                if critical_count > 0 else
+                f"Deploy sweepers and restrict commercial diesel vehicles along {priority_list[0]['station_name']} corridors ({priority_list[0]['spcb_authority']})."
+                if priority_list else
                 "Routine operations. Inspect local construction sites."
             ),
         },
     }
 
-    # ── Store in cache ─────────────────────────────────────────────────────────
-    _cache_payload    = result
-    _cache_expires_at = time.monotonic() + _CACHE_TTL_SECONDS
+    # Cache global unfiltered results
+    if station_id is None and city is None:
+        _cache_payload    = result
+        _cache_expires_at = time.monotonic() + _CACHE_TTL_SECONDS
 
     return result

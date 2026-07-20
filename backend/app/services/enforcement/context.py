@@ -18,7 +18,8 @@ class EnforcementContext:
         confidence: Dict[str, Any],
         municipal_recommendations: List[str],
         weather: Dict[str, Any],
-        history_trend: Dict[str, Any]
+        history_trend: Dict[str, Any],
+        profile: Dict[str, Any] = None
     ):
         self._station_id = station_id
         self._station_name = station_name
@@ -32,6 +33,11 @@ class EnforcementContext:
         self._municipal_recommendations = list(municipal_recommendations) if municipal_recommendations else []
         self._weather = dict(weather) if weather else {}
         self._history_trend = dict(history_trend) if history_trend else {}
+        self._profile = dict(profile) if profile else {}
+
+    @property
+    def profile(self) -> Dict[str, Any]:
+        return self._profile
 
     @property
     def station_id(self) -> str:

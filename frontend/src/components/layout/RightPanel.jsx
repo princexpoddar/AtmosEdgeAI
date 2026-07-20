@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getAqiSlug, getAqiLabel } from "@/constants/aqi";
 import Analytics from "@/components/charts/Analytics";
 import Explainability from "@/components/charts/Explainability";
@@ -197,6 +197,94 @@ function StationDetailHeader({ station, loading }) {
   );
 }
 
+function RegionalAdvisoryCard({ stationId }) {
+  const [advisory, setAdvisory] = useState(null);
+  const [lang, setLang] = useState("auto"); // "auto" or specific code
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!stationId) return;
+    setLoading(true);
+    const targetLang = lang === "auto" ? null : lang;
+    import("@/services/api").then(({ getRegionalAdvisory }) => {
+      getRegionalAdvisory(stationId, targetLang)
+        .then((res) => {
+          setAdvisory(res);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    });
+  }, [stationId, lang]);
+
+  if (!stationId || (!advisory && !loading)) return null;
+
+  const languages = [
+    { code: "auto", label: "🌐 Auto (Native)" },
+    { code: "kn", label: "💛 ಕನ್ನಡ (Kannada)" },
+    { code: "ta", label: "❤️ தமிழ் (Tamil)" },
+    { code: "hi", label: "🧡 हिंदी (Hindi)" },
+    { code: "mr", label: "💙 मराठी (Marathi)" },
+    { code: "bn", label: "💚 বাংলা (Bengali)" },
+    { code: "en", label: "🌐 English" },
+  ];
+
+  return (
+    <div className="card" style={{ padding: 14, marginBottom: 16, background: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(59, 130, 246, 0.25)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa" }}>
+          🗣️ CITIZEN HEALTH RISK ADVISORY (MULTI-LINGUAL)
+        </span>
+
+        {/* Language Switcher */}
+        <select
+          value={lang}
+          onChange={(e) => setLang(e.target.value)}
+          style={{
+            background: "rgba(15, 23, 42, 0.8)",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
+            color: "#f8fafc",
+            padding: "4px 8px",
+            borderRadius: 6,
+            fontSize: 11,
+            outline: "none",
+            cursor: "pointer"
+          }}
+        >
+          {languages.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <Skeleton height="60px" />
+      ) : advisory ? (
+        <>
+          <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: 12, borderRadius: 8, borderLeft: "3px solid #38bdf8", marginBottom: 8 }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "#f8fafc", margin: 0, lineHeight: 1.5 }}>
+              {advisory.advisory_message_regional}
+            </p>
+            {advisory.language !== "en" && (
+              <p style={{ fontSize: 11, color: "#94a3b8", margin: "4px 0 0 0", fontStyle: "italic" }}>
+                Translation: {advisory.advisory_message_english}
+              </p>
+            )}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#cbd5e1" }}>
+            <span>🏫 Catchment Alert: <strong>{advisory.sensitive_receptors_summary}</strong></span>
+            <span className="badge badge-outline" style={{ borderColor: "#a855f7", color: "#c084fc", fontSize: 10 }}>
+              {advisory.spcb_authority}
+            </span>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export default function RightPanel({ forecasts, history, stationId, stations, loading }) {
   const [tab, setTab] = useState("analytics");
   const selectedStation = (stations || []).find((s) => s.id === stationId);
@@ -211,6 +299,9 @@ export default function RightPanel({ forecasts, history, stationId, stations, lo
     <div className="dashboard-content-col">
       {/* Active Station Ingestion Details Header */}
       <StationDetailHeader station={selectedStation} loading={loading} />
+
+      {/* Multi-Lingual Citizen Advisory Card */}
+      <RegionalAdvisoryCard stationId={stationId} />
 
       <div className="panel-section">
         <div className="section-header">

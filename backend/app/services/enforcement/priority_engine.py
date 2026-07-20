@@ -59,12 +59,21 @@ def analyze(context: EnforcementContext) -> dict:
     else:
         score += 5.0
 
-    # Exposure risk (population density)
-    if exposure_val == "High":
-        score += 10.0
-        reasons.append("Quadrant sits in a dense urban corridor with high population exposure.")
+    # Exposure risk & Station Catchment Receptors
+    profile = context.profile
+    receptors = profile.get("receptors", {})
+    vuln = receptors.get("vulnerability_level", "Medium")
+    schools_count = receptors.get("schools", 0)
+    hospitals_count = receptors.get("hospitals", 0)
+
+    if vuln == "Critical" or (schools_count + hospitals_count) > 15:
+        score += 12.0
+        reasons.append(f"Station catchment contains {schools_count} schools and {hospitals_count} hospitals with Critical vulnerability.")
+    elif vuln == "High" or (schools_count + hospitals_count) > 8:
+        score += 8.0
+        reasons.append(f"High population exposure ({schools_count} schools, {hospitals_count} hospitals within 2km).")
     else:
-        score += 5.0
+        score += 4.0
 
     # 3. Microclimate stagnation factors
     wind_speed = context.weather.get("wind_speed", 10.0)
