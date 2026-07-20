@@ -133,26 +133,25 @@ def _ensure_models_loaded() -> None:
     if _model is not None:
         return
 
-    # Try CNN-LSTM first only if it has been shown to beat the baseline
-    # Currently Ridge (baseline_lr.pkl) is the best model at MAE=0.4832
-    # CNN-LSTM last scored 0.5700 — falling back to Ridge by default
-    if os.path.exists(LR_PATH):
-        try:
-            _model = _load_lr()
-            _model_type = "lr"
-            logger.info("Production inference: using Ridge baseline (best performing model)")
-            return
-        except Exception as e:
-            logger.error(f"Ridge model failed to load: {e}")
-
+    # 1. Try CNN-LSTM / TCN PyTorch deep learning model first
     if os.path.exists(CNN_LSTM_PATH):
         try:
             _model = _load_cnn_lstm()
             _model_type = "cnn_lstm"
-            logger.warning("falling back to CNN-LSTM (Ridge unavailable)")
+            logger.info("Production inference: using PyTorch CNN-LSTM / TCN Deep Learning model")
             return
         except Exception as e:
-            logger.error(f"CNN-LSTM also failed: {e}")
+            logger.error(f"CNN-LSTM model failed to load: {e}")
+
+    # 2. Fall back to Ridge baseline if PyTorch model fails or is missing
+    if os.path.exists(LR_PATH):
+        try:
+            _model = _load_lr()
+            _model_type = "lr"
+            logger.warning("Production inference: falling back to Ridge baseline")
+            return
+        except Exception as e:
+            logger.error(f"Ridge model failed to load: {e}")
 
     raise RuntimeError("No production model available (CNN-LSTM and LR both failed to load)")
 
@@ -187,7 +186,7 @@ def predict_forecast(
     df_engineered: pd.DataFrame,
     lat: float,
     lon: float,
-    city_encoded: int,
+    city_encoded: int = 0,
 ) -> dict:
     """
     Runs production inference. Chooses CNN-LSTM or LR based on what loaded.
@@ -197,7 +196,7 @@ def predict_forecast(
                         and all engineered temporal features.
         lat           : Station latitude (for static feature scaling).
         lon           : Station longitude.
-        city_encoded  : Integer city encoding (used by LR static features).
+        city_encoded  : Integer city encoding (used by static feature scaling).
 
     Returns:
         {
@@ -209,7 +208,7 @@ def predict_forecast(
     _ensure_models_loaded()
 
     if _model_type == "cnn_lstm":
-        return _predict_cnn_lstm(df_engineered, lat, lon)
+        return _predict_cnn_lstm(df_engineered, lat, lon, city_encoded)
     else:
         return _predict_lr(df_engineered, lat, lon, city_encoded)
 
@@ -218,13 +217,12 @@ def _predict_cnn_lstm(
     df_engineered: pd.DataFrame,
     lat: float,
     lon: float,
+    city_encoded: int = 0,
 ) -> dict:
     """TCN / CNN-LSTM inference path."""
     from backend.app.services.ml.config import config as ml_config
-    from backend.app.services.ml.features import get_input_feature_names, TARGET_COLS
+    from backend.app.services.ml.features import get_input_feature_names
 
-    # Use seq_len from the loaded checkpoint config
-    import pickle as _pk
     seq_len = ml_config.seq_len
     try:
         ckpt = torch.load(CNN_LSTM_PATH, map_location="cpu", weights_only=True)
@@ -240,32 +238,31 @@ def _predict_cnn_lstm(
     # Scale temporal features (fixed scaler separation)
     df_scaled = scale_temporal(df_engineered)
 
-    # Extract last seq_len steps — assemble [input_cols | pm25 | no2] (46 cols)
-    # Spatial neighbour features are zeroed out at inference (no neighbour data available)
+    # Extract last seq_len steps — assemble [input_cols (44) | pm25 (1) | no2 (1)] -> 46 cols
     input_cols = get_input_feature_names()  # 44
-    last_seq_inputs = df_scaled.iloc[-seq_len:][input_cols].values.astype(np.float32)  # (72, 44)
-    last_seq_pm25   = df_scaled.iloc[-seq_len:]["pm25"].values.astype(np.float32)[:, None]  # (72, 1)
-    last_seq_no2    = df_scaled.iloc[-seq_len:]["no2"].values.astype(np.float32)[:, None]   # (72, 1)
+    last_seq_inputs = df_scaled.iloc[-seq_len:][input_cols].values.astype(np.float32)
+    last_seq_pm25   = df_scaled.iloc[-seq_len:]["pm25"].values.astype(np.float32)[:, None]
+    last_seq_no2    = df_scaled.iloc[-seq_len:]["no2"].values.astype(np.float32)[:, None]
 
-    # Core sequence (72, 46)
+    # Core sequence (seq_len, 46)
     seq_core = np.concatenate([last_seq_inputs, last_seq_pm25, last_seq_no2], axis=1)
 
-    # Append zero spatial neighbour features (72, 4) — unknown at single-station inference
+    # Append zero spatial neighbour features (seq_len, 4)
     nbr_zeros = np.zeros((seq_len, 4), dtype=np.float32)
-    seq_full = np.concatenate([seq_core, nbr_zeros], axis=1)  # (72, 50)
+    seq_full = np.concatenate([seq_core, nbr_zeros], axis=1)  # (seq_len, 50)
 
-    # Scale static
+    # Scale static metadata
     scaled_static = scale_static(lat, lon, city_encoded)  # (3,)
 
     # Build tensors
-    x_temporal = torch.tensor(seq_full, dtype=torch.float32).unsqueeze(0)    # (1, 72, 50)
-    x_ward     = torch.tensor([0], dtype=torch.long)                          # (1,) — ward 0
-    x_static   = torch.tensor(scaled_static, dtype=torch.float32).unsqueeze(0)  # (1, 3)
+    x_temporal = torch.tensor(seq_full, dtype=torch.float32).unsqueeze(0)      # (1, seq_len, 50)
+    x_ward     = torch.tensor([0], dtype=torch.long)                            # (1,) — ward 0
+    x_static   = torch.tensor(scaled_static, dtype=torch.float32).unsqueeze(0)    # (1, 3)
 
     with torch.no_grad():
-        preds_scaled = _model(x_temporal, x_ward, x_static).numpy()[0]  # (6,)
+        preds_scaled = _model(x_temporal, x_ward, x_static).numpy()[0]          # (6,)
 
-    # Inverse scale
+    # Inverse scale targets back to physical units (µg/m³)
     preds_raw = inverse_scale_targets(preds_scaled[None, :])[0]
 
     return _build_result(preds_raw)
@@ -275,15 +272,13 @@ def _predict_lr(
     df_engineered: pd.DataFrame,
     lat: float,
     lon: float,
-    city_encoded: int,
+    city_encoded: int = 0,
 ) -> dict:
     """Ridge / Linear Regression fallback inference path."""
     from backend.app.services.ml.config import config as ml_config
-    from backend.app.services.ml.features import get_input_feature_names, TARGET_COLS
+    from backend.app.services.ml.features import get_input_feature_names
 
     seq_len = ml_config.seq_len  # 48
-
-    temporal_cols = get_temporal_feature_names()
 
     if len(df_engineered) < seq_len:
         raise ValueError(
@@ -291,15 +286,23 @@ def _predict_lr(
         )
 
     df_scaled = scale_temporal(df_engineered)
-    last_seq = df_scaled.iloc[-seq_len:][temporal_cols].values      # (48, 46)
-    scaled_static = scale_static(lat, lon, city_encoded)            # (3,)
+    input_cols = get_input_feature_names()  # 44
+    last_seq_inputs = df_scaled.iloc[-seq_len:][input_cols].values.astype(np.float32)
+    last_seq_pm25   = df_scaled.iloc[-seq_len:]["pm25"].values.astype(np.float32)[:, None]
+    last_seq_no2    = df_scaled.iloc[-seq_len:]["no2"].values.astype(np.float32)[:, None]
 
-    flat_temp   = last_seq.reshape(1, seq_len * len(temporal_cols))
-    flat_static = scaled_static.reshape(1, 3)
-    feature_vec = np.hstack([flat_temp, flat_static])
+    seq_core = np.concatenate([last_seq_inputs, last_seq_pm25, last_seq_no2], axis=1)
+    nbr_zeros = np.zeros((seq_len, 4), dtype=np.float32)
+    seq_full = np.concatenate([seq_core, nbr_zeros], axis=1)  # (48, 50)
 
-    preds_scaled = _model.predict(feature_vec)                      # (1, 6)
-    preds_raw    = inverse_scale_targets(preds_scaled)[0]           # (6,)
+    scaled_static = scale_static(lat, lon, city_encoded)      # (3,)
+
+    flat_temp   = seq_full.reshape(1, seq_len * 50)             # (1, 2400)
+    flat_static = scaled_static.reshape(1, 3)                 # (1, 3)
+    feature_vec = np.hstack([flat_temp, flat_static])        # (1, 2403)
+
+    preds_scaled = _model.predict(feature_vec)                # (1, 6)
+    preds_raw    = inverse_scale_targets(preds_scaled)[0]     # (6,)
 
     return _build_result(preds_raw)
 

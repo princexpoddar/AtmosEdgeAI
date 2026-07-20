@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.log
 
 # Datasets and Databases (large files)
 backend/geobreathe.db

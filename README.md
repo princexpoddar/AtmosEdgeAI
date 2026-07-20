@@ -155,10 +155,10 @@ AtmosEdgeAI/
 |       +-- App.jsx               # Single-page dashboard (all UI components inline)
 |       +-- App.css               # Glassmorphic design system + animations
 |       +-- index.css             # Global reset and font imports
-|
-+-- models/
-    +-- model_ward_{1-10}_lead_{24,48,72}.pth   # 30 cached PyTorch model weights
-    +-- scaler_ward_{1-10}.pkl                  # 10 cached StandardScaler objects
+|   +-- models/
+|       +-- global_model.pth          # Unified PyTorch CNN-LSTM / TCN spatiotemporal model
+|       +-- global_scaler.pkl         # Unified StandardScaler (scaler_X, scaler_y, scaler_static)
+|       +-- baseline_lr.pkl           # Ridge baseline model fallback
 ```
 
 ---
