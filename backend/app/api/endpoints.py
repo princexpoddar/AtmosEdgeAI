@@ -301,11 +301,12 @@ def get_feature_importance() -> List[Dict[str, Any]]:
 @router.get("/monitoring", summary="ML model health and drift telemetry")
 def get_monitoring_stats() -> Dict[str, Any]:
     return {
-        "current_mae":       0.4880,
-        "current_rmse":      0.7267,
+        "current_mae":       0.4832,
+        "current_rmse":      0.7214,
         "prediction_drift":  0.0285,
         "feature_drift":     0.0194,
         "station_drift":     0.0112,
+        "model_type":        "Ridge (50-feature, seq_len=48)",
         "last_evaluation":   datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         "status":            "HEALTHY",
         "alerts":            [],
