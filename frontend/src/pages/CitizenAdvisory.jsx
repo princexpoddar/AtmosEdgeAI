@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useStations } from "@/hooks/useStations";
 import { askCitizenAI, getRegionalAdvisory } from "@/services/api";
 import Navbar from "@/components/layout/Navbar";
@@ -18,7 +18,9 @@ const PROMPT_CHIPS = [
   { text: "Can I go for an outdoor morning run today?", icon: "🏃" },
   { text: "Is it safe for young children and elderly outside?", icon: "👶" },
   { text: "Do I need to wear an N95 mask for my commute?", icon: "😷" },
-  { text: "What health precautions should asthma patients take?", icon: "🫁" },
+  { text: "What precautions for asthma patients today?", icon: "🫁" },
+  { text: "Are outdoor construction workers safe here?", icon: "🏗️" },
+  { text: "Is it safe to open windows at home?", icon: "🏠" },
 ];
 
 export default function CitizenAdvisory() {
@@ -38,31 +40,31 @@ export default function CitizenAdvisory() {
     }
   }, [stations, selectedStationId]);
 
-  // Load station health advisory overview
+  // Load station profile (only on station change — NOT on language change)
   useEffect(() => {
     if (!selectedStationId) return;
-    getRegionalAdvisory(selectedStationId, selectedLang)
+    getRegionalAdvisory(selectedStationId, "en")
       .then((res) => {
         setStationAdvisory(res);
+        // Only set the welcome message when the station changes (chat reset on station switch)
         setChatLog([
           {
             sender: "ai",
-            text: res.advisory_message_regional,
-            english: res.advisory_message_english,
-            model: "Gemini 2.5 Flash",
+            text: res.advisory_message_english,
+            model: "AtmosEdgeAI",
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           },
         ]);
       })
       .catch((err) => console.error("Advisory error:", err));
-  }, [selectedStationId, selectedLang]);
+  }, [selectedStationId]); // ← Only station triggers reset, NOT language
 
-  // Scroll to bottom
+  // Scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatLog, asking]);
 
-  const handleSend = async (queryText) => {
+  const handleSend = useCallback(async (queryText) => {
     const textToSend = queryText || inputQuery;
     if (!textToSend.trim() || !selectedStationId || asking) return;
 
@@ -77,16 +79,18 @@ export default function CitizenAdvisory() {
     setAsking(true);
 
     try {
+      // Always pass the currently selected language to the AI
       const res = await askCitizenAI({
         stationId: selectedStationId,
         query: textToSend,
-        lang: selectedLang,
+        lang: selectedLang,      // ← uses live selectedLang state at call time
       });
 
       const aiMsg = {
         sender: "ai",
         text: res.reply,
         model: res.model_used || "Gemini 2.5 Flash",
+        lang: selectedLang,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       setChatLog((prev) => [...prev, aiMsg]);
@@ -103,9 +107,10 @@ export default function CitizenAdvisory() {
     } finally {
       setAsking(false);
     }
-  };
+  }, [inputQuery, selectedStationId, selectedLang, asking]);
 
   const selectedStation = stations.find((s) => s.id === selectedStationId);
+  const activeLang = LANGUAGES.find((l) => l.code === selectedLang);
 
   return (
     <div className="app-root">
@@ -125,7 +130,7 @@ export default function CitizenAdvisory() {
         {/* Two-Column Grid */}
         <div className="citizen-advisory-grid">
 
-          {/* Left Sidebar */}
+          {/* ── Left Sidebar ── */}
           <div className="citizen-sidebar">
 
             {/* Station Selector Card */}
@@ -164,27 +169,30 @@ export default function CitizenAdvisory() {
                   <span
                     className="badge"
                     style={{
-                      background: stationAdvisory.category === "Good" ? "var(--green-dim)" : "var(--red-dim)",
-                      color: stationAdvisory.category === "Good" ? "var(--green)" : "var(--red)",
-                      borderColor: stationAdvisory.category === "Good" ? "var(--green)" : "var(--red)",
+                      background: stationAdvisory.category === "Good" ? "var(--green-dim)" : stationAdvisory.category === "Satisfactory" ? "var(--yellow-dim)" : "var(--red-dim)",
+                      color: stationAdvisory.category === "Good" ? "var(--green)" : stationAdvisory.category === "Satisfactory" ? "var(--yellow)" : "var(--red)",
                     }}
                   >
                     {stationAdvisory.category}
                   </span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12, fontSize: 12, color: "var(--text-2)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border-soft)" }}>
-                    <span>PM2.5 / NO2</span>
-                    <strong style={{ color: "var(--text-1)" }}>{stationAdvisory.pm25} / {stationAdvisory.no2} µg/m³</strong>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--text-2)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                    <span>PM2.5</span>
+                    <strong style={{ color: "var(--text-1)" }}>{stationAdvisory.pm25} µg/m³</strong>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border-soft)" }}>
-                    <span>SPCB Jurisdiction</span>
-                    <strong style={{ color: "var(--purple)" }}>{stationAdvisory.spcb_authority}</strong>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                    <span>NO2</span>
+                    <strong style={{ color: "var(--text-1)" }}>{stationAdvisory.no2} µg/m³</strong>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
-                    <span>Sensitive Receptors</span>
-                    <strong style={{ color: "var(--text-1)" }}>{stationAdvisory.sensitive_receptors_summary?.split("located")[0]}</strong>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                    <span>SPCB</span>
+                    <strong style={{ color: "var(--purple)", fontSize: 11 }}>{stationAdvisory.spcb_authority}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0" }}>
+                    <span>Vulnerability</span>
+                    <strong style={{ color: "var(--text-1)" }}>{stationAdvisory.vulnerability_level}</strong>
                   </div>
                 </div>
               </div>
@@ -192,7 +200,10 @@ export default function CitizenAdvisory() {
 
             {/* Native Language Selector Card */}
             <div className="card" style={{ padding: 16 }}>
-              <h4 className="card-title" style={{ marginBottom: 10 }}>Native Regional Language</h4>
+              <h4 className="card-title" style={{ marginBottom: 4 }}>AI Response Language</h4>
+              <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 10px 0" }}>
+                Gemini AI will reply in the selected native script
+              </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
                 {LANGUAGES.map((l) => {
                   const isSel = selectedLang === l.code;
@@ -201,7 +212,7 @@ export default function CitizenAdvisory() {
                       key={l.code}
                       onClick={() => setSelectedLang(l.code)}
                       className={`btn ${isSel ? "btn-primary" : "btn-secondary"} btn-sm`}
-                      style={{ justifyContent: "center" }}
+                      style={{ justifyContent: "center", gap: 6 }}
                     >
                       <span>{l.icon}</span>
                       <span>{l.label}</span>
@@ -209,36 +220,22 @@ export default function CitizenAdvisory() {
                   );
                 })}
               </div>
-            </div>
-
-            {/* Suggested Quick Prompts Card */}
-            <div className="card" style={{ padding: 16 }}>
-              <h4 className="card-title" style={{ marginBottom: 10 }}>Quick Health Doubts</h4>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {PROMPT_CHIPS.map((chip, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSend(chip.text)}
-                    disabled={asking}
-                    className="prompt-chip-btn"
-                    style={{ textAlign: "left", width: "100%" }}
-                  >
-                    <span>{chip.icon}</span>
-                    <span>{chip.text}</span>
-                  </button>
-                ))}
-              </div>
+              {selectedLang !== "en" && (
+                <p style={{ fontSize: 11, color: "var(--accent)", margin: "10px 0 0 0", background: "var(--accent-dim)", borderRadius: "var(--radius-sm)", padding: "6px 8px" }}>
+                  ✓ AI will respond in {activeLang?.label} script for your next question
+                </p>
+              )}
             </div>
 
           </div>
 
-          {/* Right Main Chat Terminal */}
+          {/* ── Right Main Chat Terminal ── */}
           <div className="citizen-chat-terminal">
 
             {/* Chat Terminal Header */}
             <div className="chat-terminal-header">
               <div className="chat-terminal-title">
-                <div style={{ width: 28, height: 28, borderRadius: "var(--radius-sm)", background: "var(--accent-dim)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: 28, height: 28, borderRadius: "var(--radius-sm)", background: "var(--accent-dim)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Bot size={16} />
                 </div>
                 <div>
@@ -252,7 +249,7 @@ export default function CitizenAdvisory() {
 
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span className="badge badge-outline" style={{ color: "var(--accent)", borderColor: "var(--accent)" }}>
-                  {LANGUAGES.find((l) => l.code === selectedLang)?.label} Script
+                  {activeLang?.icon} {activeLang?.label}
                 </span>
               </div>
             </div>
@@ -263,14 +260,11 @@ export default function CitizenAdvisory() {
                 <div key={i} className={`chat-bubble-row ${msg.sender}`}>
                   <div className={`chat-bubble ${msg.sender}`}>
                     <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>
-                    {msg.english && (
-                      <p style={{ fontSize: 11, color: "var(--text-3)", margin: "6px 0 0 0", fontStyle: "italic", borderTop: "1px dashed var(--border)", paddingTop: 4 }}>
-                        Translation: {msg.english}
-                      </p>
-                    )}
                   </div>
                   <div className="chat-bubble-meta">
-                    {msg.sender === "user" ? "You" : `🤖 ${msg.model} • ${msg.time}`}
+                    {msg.sender === "user"
+                      ? `You • ${msg.time}`
+                      : `🤖 ${msg.model} • ${msg.time}${msg.lang && msg.lang !== "en" ? ` • ${LANGUAGES.find(l => l.code === msg.lang)?.label}` : ""}`}
                   </div>
                 </div>
               ))}
@@ -280,12 +274,43 @@ export default function CitizenAdvisory() {
                   <div className="chat-bubble ai" style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <Spinner size="sm" />
                     <span style={{ fontSize: 12, color: "var(--text-2)" }}>
-                      Gemini 2.5 Flash is analyzing live station telemetry &amp; generating health advice…
+                      Generating {activeLang?.label} health advice from live telemetry…
                     </span>
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
+            </div>
+
+            {/* ── Recommendation Chips Bar (above input) ── */}
+            <div style={{
+              padding: "10px 20px 0 20px",
+              borderTop: "1px solid var(--border-soft)",
+              background: "var(--bg-2)",
+            }}>
+              <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 8px 0", fontWeight: 500 }}>
+                SUGGESTED QUESTIONS
+              </p>
+              <div style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                paddingBottom: 10,
+                scrollbarWidth: "none",
+              }}>
+                {PROMPT_CHIPS.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSend(chip.text)}
+                    disabled={asking}
+                    className="prompt-chip-btn"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <span>{chip.icon}</span>
+                    <span style={{ whiteSpace: "nowrap" }}>{chip.text}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Input Bar */}
@@ -296,7 +321,7 @@ export default function CitizenAdvisory() {
                 value={inputQuery}
                 onChange={(e) => setInputQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder={`Ask any health question in ${LANGUAGES.find((l) => l.code === selectedLang)?.label}…`}
+                placeholder={`Ask any health question${selectedLang !== "en" ? ` — AI replies in ${activeLang?.label}` : " in any language"}…`}
                 disabled={asking}
               />
               <button
@@ -304,7 +329,7 @@ export default function CitizenAdvisory() {
                 disabled={asking || !inputQuery.trim()}
                 className="btn btn-primary"
               >
-                <span>{asking ? "Analyzing…" : "Ask AI"}</span>
+                <span>{asking ? "Thinking…" : "Ask AI"}</span>
                 <Send size={13} />
               </button>
             </div>
