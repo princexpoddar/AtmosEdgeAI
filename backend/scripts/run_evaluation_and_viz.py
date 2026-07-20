@@ -79,6 +79,21 @@ def main():
     print("Flattening features for tabular baselines...")
     test_X_flat = flatten_data(test_X, test_static)
     print(f"Tabular features shape: {test_X_flat.shape}")
+
+    # Check if saved baseline models are compatible with current feature shape
+    _baselines_compatible = True
+    if os.path.exists(LR_PATH):
+        try:
+            import pickle as _pk
+            with open(LR_PATH, "rb") as _f:
+                _lr_check = _pk.load(_f)
+            expected_n_features = test_X_flat.shape[1]
+            if hasattr(_lr_check, "n_features_in_") and _lr_check.n_features_in_ != expected_n_features:
+                print(f"  WARNING: LR model expects {_lr_check.n_features_in_} features, "
+                      f"got {expected_n_features}. Baselines need retraining. Skipping baseline eval.")
+                _baselines_compatible = False
+        except Exception:
+            pass
     
     # 1. Evaluate Persistence
     print("\n--- Evaluating Persistence Baseline... ---")
@@ -134,16 +149,16 @@ def main():
     
     # 5. Evaluate CNN-LSTM
     print("--- Evaluating CNN-LSTM... ---")
-    checkpoint = torch.load(CNN_PATH, map_location="cpu")
+    checkpoint = torch.load(CNN_PATH, map_location="cpu", weights_only=True)
     model_config = checkpoint["config"]
     cnn_model = GlobalCNNLSTMForecaster(
-        temporal_dim=model_config["temporal_dim"],
-        static_dim=model_config["static_dim"],
-        num_wards=model_config["num_wards"],
-        hidden_dim=model_config["hidden_dim"],
-        num_layers=model_config["num_lstm_layers"],
-        dropout=model_config["dropout"],
-        seq_len=model_config["seq_len"]
+        temporal_dim=model_config.get("temporal_dim", test_X.shape[2]),
+        static_dim=model_config.get("static_dim", test_static.shape[1]),
+        num_wards=model_config.get("num_wards", 100),
+        hidden_dim=model_config.get("hidden_dim", 128),
+        num_layers=model_config.get("num_lstm_layers", 3),
+        dropout=0.0,   # no dropout at eval
+        seq_len=model_config.get("seq_len", test_X.shape[1])
     )
     cnn_model.load_state_dict(checkpoint["model_state_dict"])
     cnn_model.eval()
@@ -307,10 +322,11 @@ def main():
     # Feature Importance for XGBoost
     print("Generating Feature Importance plot...")
     temporal_cols = get_temporal_feature_names()
+    actual_seq_len = test_X.shape[1]  # use actual seq_len from loaded data
     feat_names = []
-    for t in range(24):
+    for t in range(actual_seq_len):
         for col in temporal_cols:
-            feat_names.append(f"{col}_t-{23-t}")
+            feat_names.append(f"{col}_t-{actual_seq_len - 1 - t}")
     feat_names.extend(["latitude", "longitude", "elevation"])
     
     importances = np.zeros(len(feat_names))
