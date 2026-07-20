@@ -133,25 +133,26 @@ def _ensure_models_loaded() -> None:
     if _model is not None:
         return
 
-    # Try CNN-LSTM first
-    if os.path.exists(CNN_LSTM_PATH):
-        try:
-            _model = _load_cnn_lstm()
-            _model_type = "cnn_lstm"
-            logger.info("Production inference: using CNN-LSTM model")
-            return
-        except Exception as e:
-            logger.warning(f"falling back to LR baseline: CNN-LSTM load failed — {e}")
-
-    # Fallback to LR
+    # Try CNN-LSTM first only if it has been shown to beat the baseline
+    # Currently Ridge (baseline_lr.pkl) is the best model at MAE=0.4832
+    # CNN-LSTM last scored 0.5700 — falling back to Ridge by default
     if os.path.exists(LR_PATH):
         try:
             _model = _load_lr()
             _model_type = "lr"
-            logger.warning("falling back to LR baseline: using baseline_lr.pkl for inference")
+            logger.info("Production inference: using Ridge baseline (best performing model)")
             return
         except Exception as e:
-            logger.error(f"LR baseline also failed to load: {e}")
+            logger.error(f"Ridge model failed to load: {e}")
+
+    if os.path.exists(CNN_LSTM_PATH):
+        try:
+            _model = _load_cnn_lstm()
+            _model_type = "cnn_lstm"
+            logger.warning("falling back to CNN-LSTM (Ridge unavailable)")
+            return
+        except Exception as e:
+            logger.error(f"CNN-LSTM also failed: {e}")
 
     raise RuntimeError("No production model available (CNN-LSTM and LR both failed to load)")
 
@@ -276,24 +277,29 @@ def _predict_lr(
     lon: float,
     city_encoded: int,
 ) -> dict:
-    """Linear Regression fallback inference path (seq_len=24, 41 features)."""
+    """Ridge / Linear Regression fallback inference path."""
+    from backend.app.services.ml.config import config as ml_config
+    from backend.app.services.ml.features import get_input_feature_names, TARGET_COLS
+
+    seq_len = ml_config.seq_len  # 48
+
     temporal_cols = get_temporal_feature_names()
 
-    if len(df_engineered) < 24:
+    if len(df_engineered) < seq_len:
         raise ValueError(
-            f"LR inference requires >= 24 steps, got {len(df_engineered)}"
+            f"Ridge inference requires >= {seq_len} steps, got {len(df_engineered)}"
         )
 
     df_scaled = scale_temporal(df_engineered)
-    last_seq = df_scaled.iloc[-24:][temporal_cols].values     # (24, 41)
-    scaled_static = scale_static(lat, lon, city_encoded)      # (3,)
+    last_seq = df_scaled.iloc[-seq_len:][temporal_cols].values      # (48, 46)
+    scaled_static = scale_static(lat, lon, city_encoded)            # (3,)
 
-    flat_temp   = last_seq.reshape(1, 24 * len(temporal_cols))
+    flat_temp   = last_seq.reshape(1, seq_len * len(temporal_cols))
     flat_static = scaled_static.reshape(1, 3)
     feature_vec = np.hstack([flat_temp, flat_static])
 
-    preds_scaled = _model.predict(feature_vec)                # (1, 6)
-    preds_raw    = inverse_scale_targets(preds_scaled)[0]     # (6,)
+    preds_scaled = _model.predict(feature_vec)                      # (1, 6)
+    preds_raw    = inverse_scale_targets(preds_scaled)[0]           # (6,)
 
     return _build_result(preds_raw)
 

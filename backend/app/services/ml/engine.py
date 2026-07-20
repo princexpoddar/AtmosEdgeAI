@@ -144,20 +144,9 @@ def train_model(
         weight_decay=config.weight_decay,
     )
 
-    # Linear warmup scheduler (epochs 1 .. warmup_epochs)
-    warmup_epochs = config.warmup_epochs
-
-    def _warmup_lambda(epoch: int) -> float:
-        if epoch < warmup_epochs:
-            return float(epoch + 1) / float(max(warmup_epochs, 1))
-        return 1.0
-
-    warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_warmup_lambda)
-
-    # Cosine annealing after warmup — T_0=30 gives full cycles, T_mult=1 keeps them equal
-    T_0 = 30
-    cosine_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer, T_0=T_0, T_mult=1, eta_min=1e-5
+    # ReduceLROnPlateau: gentle decay when val plateaus
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.7, patience=8, min_lr=1e-7, verbose=False
     )
 
     early_stopper = EarlyStopping(patience=config.patience)
@@ -189,11 +178,8 @@ def train_model(
         train_losses.append(epoch_train)
         val_losses.append(epoch_val)
 
-        # Step schedulers
-        if epoch <= warmup_epochs:
-            warmup_scheduler.step()
-        else:
-            cosine_scheduler.step(epoch - warmup_epochs - 1)
+        # Step ReduceLROnPlateau on val loss
+        scheduler.step(epoch_val)
         current_lr = optimizer.param_groups[0]["lr"]
 
         vt_ratio = epoch_val / max(epoch_train, 1e-8)
