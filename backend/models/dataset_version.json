@@ -1,6 +1,6 @@
 {
   "dataset_version": "v1.0.0",
-  "generated_at": "2026-07-17T16:04:01.020628Z",
+  "generated_at": "2026-07-19T21:03:12.090697Z",
   "rows": 2068656,
   "stations": 40,
   "features": [
@@ -29,6 +29,6 @@
     "validation": 0.15,
     "test": 0.15
   },
-  "git_commit": "23c50f4daec54bcf8d817bb28fb93f114919d04a",
-  "config_hash": "14b63e21fec2b3b35d027a3c49f934c067082375068728a2a9903647e9075098"
+  "git_commit": "504ab83522d2c27896cd1991de09c023cf4247a2",
+  "config_hash": "83afc721266125fba71213c3da4e3911cb28968310da6b0a19838c3f9f1d6232"
 }
