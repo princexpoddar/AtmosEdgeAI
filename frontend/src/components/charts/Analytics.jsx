@@ -72,9 +72,9 @@ export default function Analytics({ history, loading }) {
       <div className="analytics-chart-box">
         <h4 className="analytics-chart-title">Historical Ingestion Cycles (Last 72h)</h4>
         <svg viewBox="0 0 500 150" style={{ width: "100%", height: "auto", overflow: "visible" }}>
-          <line x1="10" y1="10"  x2="490" y2="10"  stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
-          <line x1="10" y1="75"  x2="490" y2="75"  stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
-          <line x1="10" y1="140" x2="490" y2="140" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+          <line x1="10" y1="10"  x2="490" y2="10"  stroke="var(--border-soft)" strokeDasharray="3" />
+          <line x1="10" y1="75"  x2="490" y2="75"  stroke="var(--border-soft)" strokeDasharray="3" />
+          <line x1="10" y1="140" x2="490" y2="140" stroke="var(--border-soft)" strokeDasharray="3" />
           <path d={pathData} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           {sparsePoints.map((p, idx) => (
             <g key={idx}>

@@ -39,12 +39,12 @@ function ForecastCards({ forecasts }) {
               <div className="forecast-chips">
                 <div className="forecast-chip">
                   <span className="forecast-chip-label">PM2.5</span>
-                  <span className="forecast-chip-val">{fmt(fc.pm25_24h)}</span>
+                  <span className="forecast-chip-val">{fmt(fc.predicted_pm25)}</span>
                   <span className="forecast-chip-unit">µg/m³</span>
                 </div>
                 <div className="forecast-chip">
                   <span className="forecast-chip-label">NO₂</span>
-                  <span className="forecast-chip-val">{fmt(fc.no2_24h)}</span>
+                  <span className="forecast-chip-val">{fmt(fc.predicted_no2)}</span>
                   <span className="forecast-chip-unit">µg/m³</span>
                 </div>
               </div>

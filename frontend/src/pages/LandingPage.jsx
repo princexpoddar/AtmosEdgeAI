@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Globe, Flame, PieChart, CheckCircle2 } from "lucide-react";
 import { getAqiColor, getAqiLabel } from "@/constants/aqi";
+import { useStations } from "@/hooks/useStations";
 import Navbar from "@/components/layout/Navbar";
 
 const FEATURES = [
@@ -24,13 +25,14 @@ const FEATURES = [
 
 const CHECKLIST = [
   "Temporal leakage constraints verified",
-  "Chronological multi-horizon sequences shaped",
-  "Single global Standard Scaler fitted",
-  "Early Stopping and Cosine LR active",
+  "50-feature spatiotemporal sequences (seq_len=48)",
+  "Separate scalers for inputs and targets (no leakage)",
+  "Spatial K-NN neighbour context features included",
 ];
 
-export default function LandingPage({ stations = [] }) {
+export default function LandingPage() {
   const navigate = useNavigate();
+  const { stations } = useStations();
 
   const { totalStations, avgAqi } = useMemo(() => {
     const total = stations.length;
@@ -79,8 +81,8 @@ export default function LandingPage({ stations = [] }) {
                 <span className="aqi-big-category" style={{ color: avgColor }}>{avgLabel}</span>
               </div>
               <div className="aqi-hero-card-stats">
-                <div>Active Stations: <strong style={{ color: "#fff" }}>{totalStations}</strong></div>
-                <div>Ingestion Size: <strong style={{ color: "#fff" }}>2,068k rows</strong></div>
+                <div>Active Stations: <strong style={{ color: "var(--text-1)" }}>{totalStations || "—"}</strong></div>
+                <div>Ingestion Size: <strong style={{ color: "var(--text-1)" }}>2,068k rows</strong></div>
               </div>
             </div>
           </div>
@@ -107,17 +109,17 @@ export default function LandingPage({ stations = [] }) {
           <div className="landing-benchmarks-left">
             <h3 className="landing-benchmarks-title">Production ML Engine Performance</h3>
             <p className="landing-benchmarks-desc">
-              The global predictor evaluates on an untouched test set of 13,981 observations.
-              Linear Regression and XGBoost lead the leaderboard with extreme execution throughput.
+              The global predictor evaluates on an untouched test set of 13,572 observations.
+              Ridge Regression leads the leaderboard with the best generalization on new temporal data.
             </p>
             <div className="landing-metric-grid">
               <div>
-                <span className="landing-metric-label">LR FORECAST MAE</span>
-                <strong className="landing-metric-val-green">0.4880</strong>
+                <span className="landing-metric-label">RIDGE FORECAST MAE</span>
+                <strong className="landing-metric-val-green">0.4832</strong>
               </div>
               <div>
                 <span className="landing-metric-label">XGBOOST FORECAST MAE</span>
-                <strong className="landing-metric-val-blue">0.4965</strong>
+                <strong className="landing-metric-val-blue">0.4963</strong>
               </div>
             </div>
           </div>

@@ -146,8 +146,8 @@ export default function Predictor({ stations: propStations }) {
             <div className="pred-header-eyebrow">⚗ Spatiotemporal ML Engine</div>
             <h1 className="pred-header-title">AI Pollution Predictor</h1>
             <p className="pred-header-sub">
-              Live inference using the deployed Linear Regression baseline with rolling lag features,
-              coordinate encoding and on-the-fly scaling.
+              Live inference using the deployed Ridge Regression model with 50-feature
+              spatiotemporal sequences, K-NN spatial context, and scaler-corrected targets.
             </p>
           </div>
           {/* Live station current reading pill */}
@@ -304,11 +304,11 @@ export default function Predictor({ stations: propStations }) {
               <h4 className="pred-info-title">🧠 Model Architecture</h4>
               <div className="pred-info-rows">
                 {[
-                  { k: "Algorithm",      v: "Linear Regression (Spatial)" },
-                  { k: "Feature Set",    v: "Rolling lag, lat/lon encoding, time features" },
+                  { k: "Algorithm",      v: "Ridge Regression (50-feature spatial)" },
+                  { k: "Feature Set",    v: "48-step lags, rolling stats, K-NN neighbours" },
                   { k: "Training Data",  v: "CPCB historical observations (SQLite)" },
-                  { k: "Scaling",        v: "StandardScaler (on-the-fly)" },
-                  { k: "Forecast Type",  v: "PM2.5 → AQI (CPCB formula)" },
+                  { k: "Scaling",        v: "Separate scalers for inputs and targets" },
+                  { k: "Forecast Type",  v: "PM2.5 / NO₂ → AQI (CPCB formula)" },
                 ].map(({ k, v }) => (
                   <div key={k} className="pred-info-row">
                     <span className="pred-info-key">{k}</span>
