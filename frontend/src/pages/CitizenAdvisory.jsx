@@ -3,22 +3,22 @@ import { useStations } from "@/hooks/useStations";
 import { askCitizenAI, getRegionalAdvisory } from "@/services/api";
 import Navbar from "@/components/layout/Navbar";
 import Spinner from "@/components/ui/Spinner";
+import { Send, Bot } from "lucide-react";
 
 const LANGUAGES = [
-  { code: "en", label: "🌐 English", flag: "🌐" },
-  { code: "kn", label: "💛 ಕನ್ನಡ (Kannada)", flag: "💛" },
-  { code: "ta", label: "❤️ தமிழ் (Tamil)", flag: "❤️" },
-  { code: "hi", label: "🧡 हिंदी (Hindi)", flag: "🧡" },
-  { code: "mr", label: "💙 मराठी (Marathi)", flag: "💙" },
-  { code: "bn", label: "💚 বাংলা (Bengali)", flag: "💚" },
+  { code: "en", label: "English", icon: "🌐" },
+  { code: "kn", label: "ಕನ್ನಡ", icon: "💛" },
+  { code: "ta", label: "தமிழ்", icon: "❤️" },
+  { code: "hi", label: "हिंदी", icon: "🧡" },
+  { code: "mr", label: "मराठी", icon: "💙" },
+  { code: "bn", label: "বাংলা", icon: "💚" },
 ];
 
 const PROMPT_CHIPS = [
-  { text: "Can I go for an outdoor morning run or exercise today?", icon: "🏃" },
-  { text: "Is it safe for young children and senior citizens outside?", icon: "👶" },
+  { text: "Can I go for an outdoor morning run today?", icon: "🏃" },
+  { text: "Is it safe for young children and elderly outside?", icon: "👶" },
   { text: "Do I need to wear an N95 mask for my commute?", icon: "😷" },
-  { text: "What health precautions should asthmatic patients take?", icon: "🫁" },
-  { text: "Are outdoor construction workers safe in this area?", icon: "🏗️" },
+  { text: "What health precautions should asthma patients take?", icon: "🫁" },
 ];
 
 export default function CitizenAdvisory() {
@@ -44,7 +44,6 @@ export default function CitizenAdvisory() {
     getRegionalAdvisory(selectedStationId, selectedLang)
       .then((res) => {
         setStationAdvisory(res);
-        // Welcome message in initial chat
         setChatLog([
           {
             sender: "ai",
@@ -58,7 +57,7 @@ export default function CitizenAdvisory() {
       .catch((err) => console.error("Advisory error:", err));
   }, [selectedStationId, selectedLang]);
 
-  // Scroll to bottom of chat
+  // Scroll to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatLog, asking]);
@@ -96,7 +95,7 @@ export default function CitizenAdvisory() {
         ...prev,
         {
           sender: "ai",
-          text: "⚠️ Sorry, I could not process your query at this moment. Please check server connections.",
+          text: "⚠️ Unable to reach Gemini AI engine. Please verify server connectivity.",
           model: "Error",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
@@ -111,214 +110,207 @@ export default function CitizenAdvisory() {
   return (
     <div className="app-root">
       <Navbar />
-      <div className="enforcement-page">
+      <div className="citizen-advisory-page">
 
-        {/* Header Title & Controls */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
-              🗣️ Citizen Health Risk Advisory System (Multi-Lingual AI)
-            </h2>
-            <p style={{ fontSize: 13, color: "var(--text-2)", margin: "2px 0 0 0" }}>
-              Real-Time AI Telemetry Health Advisor — Powered by Google Gemini 2.5 Flash
-            </p>
-          </div>
-
-          {/* Station & Language Controls */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <select
-              value={selectedStationId}
-              onChange={(e) => setSelectedStationId(e.target.value)}
-              disabled={stationsLoading}
-              style={{
-                background: "rgba(15, 23, 42, 0.8)",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
-                color: "#f8fafc",
-                padding: "8px 14px",
-                borderRadius: 8,
-                fontSize: 13,
-                outline: "none",
-                cursor: "pointer"
-              }}
-            >
-              {stations.map((st) => (
-                <option key={st.id} value={st.id}>
-                  📍 {st.name} ({st.city}) — AQI {st.aqi ?? "N/A"}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedLang}
-              onChange={(e) => setSelectedLang(e.target.value)}
-              style={{
-                background: "rgba(15, 23, 42, 0.8)",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
-                color: "#f8fafc",
-                padding: "8px 14px",
-                borderRadius: 8,
-                fontSize: 13,
-                outline: "none",
-                cursor: "pointer"
-              }}
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Station Real-Time Health Risk Header Dossier */}
-        {stationAdvisory && selectedStation && (
-          <div className="card" style={{ padding: 16, marginBottom: 16, background: "rgba(30, 41, 59, 0.7)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-              <div>
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#60a5fa" }}>
-                  MONITORING CATCHMENT HEALTH PROFILE
-                </span>
-                <h3 style={{ fontSize: 18, fontWeight: 700, margin: "4px 0", color: "#f8fafc" }}>
-                  📍 {stationAdvisory.station_name} ({stationAdvisory.city}, {stationAdvisory.state})
-                </h3>
-                <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                  <span className="badge badge-outline" style={{ borderColor: stationAdvisory.category === "Good" ? "#22c55e" : "#ef4444", color: "#f8fafc" }}>
-                    AQI Status: {stationAdvisory.category} (PM2.5: {stationAdvisory.pm25} µg/m³)
-                  </span>
-                  <span className="badge badge-outline" style={{ borderColor: "#a855f7", color: "#c084fc" }}>
-                    ⚖️ {stationAdvisory.spcb_authority}
-                  </span>
-                </div>
-              </div>
-
-              {/* Receptor Summary Pills */}
-              <div style={{ display: "flex", gap: 12, alignItems: "center", background: "rgba(15, 23, 42, 0.6)", padding: "10px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)" }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#f8fafc" }}>{stationAdvisory.sensitive_receptors_summary}</div>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Vulnerability Level: <span style={{ color: "#f87171", fontWeight: 700 }}>{stationAdvisory.vulnerability_level}</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Suggested Prompt Chips */}
+        {/* Page Title Header */}
         <div style={{ marginBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: 8 }}>
-            💡 QUICK HEALTH QUESTIONS (CLICK TO ASK GEMINI AI):
-          </span>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {PROMPT_CHIPS.map((chip, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSend(chip.text)}
-                disabled={asking}
-                style={{
-                  background: "rgba(30, 41, 59, 0.8)",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  color: "#cbd5e1",
-                  padding: "6px 12px",
-                  borderRadius: 20,
-                  fontSize: 12,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  transition: "all 0.2s ease"
-                }}
-              >
-                <span>{chip.icon}</span>
-                <span>{chip.text}</span>
-              </button>
-            ))}
-          </div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
+            🗣️ Citizen Health Risk Advisory System
+          </h2>
+          <p style={{ fontSize: 13, color: "var(--text-2)", margin: "3px 0 0 0" }}>
+            Real-Time Multi-Lingual Citizen Environmental Health Advisor — Powered by Google Gemini 2.5 Flash
+          </p>
         </div>
 
-        {/* Main Interactive AI Conversational Log */}
-        <div className="card" style={{ padding: 16, minHeight: 380, display: "flex", flexDirection: "column", background: "rgba(15, 23, 42, 0.85)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 14 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa" }}>
-              🤖 Gemini 2.5 Flash Air Safety Assistant ({LANGUAGES.find(l => l.code === selectedLang)?.label})
-            </span>
-            <span style={{ fontSize: 11, color: "#34d399" }}>● Connected to Live CAAQMS Telemetry</span>
-          </div>
+        {/* Two-Column Grid */}
+        <div className="citizen-advisory-grid">
 
-          {/* Chat Messages */}
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, paddingRight: 4, maxHeight: 420 }}>
-            {chatLog.map((msg, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: msg.sender === "user" ? "flex-end" : "flex-start",
-                }}
+          {/* Left Sidebar */}
+          <div className="citizen-sidebar">
+
+            {/* Station Selector Card */}
+            <div className="card" style={{ padding: 16 }}>
+              <h4 className="card-title" style={{ marginBottom: 10 }}>Select Station Catchment</h4>
+              <select
+                className="chat-input-field"
+                value={selectedStationId}
+                onChange={(e) => setSelectedStationId(e.target.value)}
+                disabled={stationsLoading}
+                style={{ width: "100%", cursor: "pointer" }}
               >
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    background: msg.sender === "user" ? "#2563eb" : "rgba(30, 41, 59, 0.9)",
-                    border: msg.sender === "user" ? "none" : "1px solid rgba(59, 130, 246, 0.3)",
-                    color: "#f8fafc",
-                    padding: "12px 16px",
-                    borderRadius: msg.sender === "user" ? "16px 16px 2px 16px" : "16px 16px 16px 2px",
-                    fontSize: 14,
-                    lineHeight: 1.5,
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
-                  }}
-                >
-                  <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>
-                  {msg.english && (
-                    <p style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 0 0", fontStyle: "italic", borderTop: "1px dashed rgba(255,255,255,0.1)", paddingTop: 4 }}>
-                      English: {msg.english}
-                    </p>
-                  )}
-                </div>
-                <div style={{ fontSize: 10, color: "#64748b", marginTop: 4, padding: "0 4px" }}>
-                  {msg.sender === "user" ? "You" : `🤖 Gemini 2.5 Flash • ${msg.time}`}
-                </div>
-              </div>
-            ))}
+                {stations.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    📍 {st.name} ({st.city})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {asking && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#60a5fa", fontSize: 13 }}>
-                <Spinner size="sm" />
-                <span>Gemini AI is analyzing station telemetry &amp; generating native health advice…</span>
+            {/* Catchment Health Profile Card */}
+            {stationAdvisory && selectedStation && (
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      CATCHMENT PROFILE
+                    </span>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, margin: "2px 0 0 0", color: "var(--text-1)" }}>
+                      {stationAdvisory.station_name}
+                    </h3>
+                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+                      {stationAdvisory.city}, {stationAdvisory.state}
+                    </span>
+                  </div>
+                  <span
+                    className="badge"
+                    style={{
+                      background: stationAdvisory.category === "Good" ? "var(--green-dim)" : "var(--red-dim)",
+                      color: stationAdvisory.category === "Good" ? "var(--green)" : "var(--red)",
+                      borderColor: stationAdvisory.category === "Good" ? "var(--green)" : "var(--red)",
+                    }}
+                  >
+                    {stationAdvisory.category}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12, fontSize: 12, color: "var(--text-2)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                    <span>PM2.5 / NO2</span>
+                    <strong style={{ color: "var(--text-1)" }}>{stationAdvisory.pm25} / {stationAdvisory.no2} µg/m³</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                    <span>SPCB Jurisdiction</span>
+                    <strong style={{ color: "var(--purple)" }}>{stationAdvisory.spcb_authority}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+                    <span>Sensitive Receptors</span>
+                    <strong style={{ color: "var(--text-1)" }}>{stationAdvisory.sensitive_receptors_summary?.split("located")[0]}</strong>
+                  </div>
+                </div>
               </div>
             )}
-            <div ref={chatEndRef} />
+
+            {/* Native Language Selector Card */}
+            <div className="card" style={{ padding: 16 }}>
+              <h4 className="card-title" style={{ marginBottom: 10 }}>Native Regional Language</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                {LANGUAGES.map((l) => {
+                  const isSel = selectedLang === l.code;
+                  return (
+                    <button
+                      key={l.code}
+                      onClick={() => setSelectedLang(l.code)}
+                      className={`btn ${isSel ? "btn-primary" : "btn-secondary"} btn-sm`}
+                      style={{ justifyContent: "center" }}
+                    >
+                      <span>{l.icon}</span>
+                      <span>{l.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Suggested Quick Prompts Card */}
+            <div className="card" style={{ padding: 16 }}>
+              <h4 className="card-title" style={{ marginBottom: 10 }}>Quick Health Doubts</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {PROMPT_CHIPS.map((chip, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSend(chip.text)}
+                    disabled={asking}
+                    className="prompt-chip-btn"
+                    style={{ textAlign: "left", width: "100%" }}
+                  >
+                    <span>{chip.icon}</span>
+                    <span>{chip.text}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          {/* Input Box */}
-          <div style={{ display: "flex", gap: 10, marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-            <input
-              type="text"
-              value={inputQuery}
-              onChange={(e) => setInputQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={`Ask Gemini AI any health or air safety question in ${LANGUAGES.find(l => l.code === selectedLang)?.label}…`}
-              disabled={asking}
-              style={{
-                flex: 1,
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
-                color: "#f8fafc",
-                padding: "10px 14px",
-                borderRadius: 8,
-                fontSize: 13,
-                outline: "none"
-              }}
-            />
-            <button
-              onClick={() => handleSend()}
-              disabled={asking || !inputQuery.trim()}
-              className="btn btn-primary"
-              style={{ padding: "0 20px" }}
-            >
-              {asking ? "Thinking…" : "Ask AI 🚀"}
-            </button>
+          {/* Right Main Chat Terminal */}
+          <div className="citizen-chat-terminal">
+
+            {/* Chat Terminal Header */}
+            <div className="chat-terminal-header">
+              <div className="chat-terminal-title">
+                <div style={{ width: 28, height: 28, borderRadius: "var(--radius-sm)", background: "var(--accent-dim)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Bot size={16} />
+                </div>
+                <div>
+                  <span style={{ fontWeight: 600, color: "var(--text-1)" }}>Gemini 2.5 Flash Health Assistant</span>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 6, marginTop: 1 }}>
+                    <span className="live-pulse" />
+                    <span>Real-Time CAAQMS Telemetry Linked</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span className="badge badge-outline" style={{ color: "var(--accent)", borderColor: "var(--accent)" }}>
+                  {LANGUAGES.find((l) => l.code === selectedLang)?.label} Script
+                </span>
+              </div>
+            </div>
+
+            {/* Scrollable Chat Message Stream */}
+            <div className="chat-log-container">
+              {chatLog.map((msg, i) => (
+                <div key={i} className={`chat-bubble-row ${msg.sender}`}>
+                  <div className={`chat-bubble ${msg.sender}`}>
+                    <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>
+                    {msg.english && (
+                      <p style={{ fontSize: 11, color: "var(--text-3)", margin: "6px 0 0 0", fontStyle: "italic", borderTop: "1px dashed var(--border)", paddingTop: 4 }}>
+                        Translation: {msg.english}
+                      </p>
+                    )}
+                  </div>
+                  <div className="chat-bubble-meta">
+                    {msg.sender === "user" ? "You" : `🤖 ${msg.model} • ${msg.time}`}
+                  </div>
+                </div>
+              ))}
+
+              {asking && (
+                <div className="chat-bubble-row ai">
+                  <div className="chat-bubble ai" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Spinner size="sm" />
+                    <span style={{ fontSize: 12, color: "var(--text-2)" }}>
+                      Gemini 2.5 Flash is analyzing live station telemetry &amp; generating health advice…
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input Bar */}
+            <div className="chat-input-bar">
+              <input
+                type="text"
+                className="chat-input-field"
+                value={inputQuery}
+                onChange={(e) => setInputQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                placeholder={`Ask any health question in ${LANGUAGES.find((l) => l.code === selectedLang)?.label}…`}
+                disabled={asking}
+              />
+              <button
+                onClick={() => handleSend()}
+                disabled={asking || !inputQuery.trim()}
+                className="btn btn-primary"
+              >
+                <span>{asking ? "Analyzing…" : "Ask AI"}</span>
+                <Send size={13} />
+              </button>
+            </div>
+
           </div>
+
         </div>
 
       </div>
