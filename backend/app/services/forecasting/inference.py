@@ -17,7 +17,7 @@ import pandas as pd
 import torch
 
 from backend.app.services.ml.config import MODELS_DIR
-from backend.app.services.ml.model import GlobalCNNLSTMForecaster
+from backend.app.services.ml.model import GlobalCNNLSTMForecaster, TCNForecaster
 from backend.app.services.forecasting.feature_engineering import get_temporal_feature_names
 from backend.app.services.forecasting.preprocessing import (
     scale_temporal,
@@ -90,19 +90,33 @@ _model_type = None     # "cnn_lstm" | "lr"
 
 
 def _load_cnn_lstm():
-    """Load GlobalCNNLSTMForecaster from checkpoint. Returns model on CPU."""
+    """Load TCNForecaster (or legacy GlobalCNNLSTMForecaster) from checkpoint."""
     ckpt = torch.load(CNN_LSTM_PATH, map_location="cpu", weights_only=True)
     cfg = ckpt.get("config", {})
-    model = GlobalCNNLSTMForecaster(
-        temporal_dim=cfg.get("temporal_dim", 50),
-        static_dim=cfg.get("static_dim", 3),
-        num_wards=cfg.get("num_wards", 100),
-        seq_len=cfg.get("seq_len", 72),
-        hidden_dim=cfg.get("hidden_dim", 128),
-        num_layers=cfg.get("num_lstm_layers", 3),
-        dropout=0.0,   # no dropout at inference
-        output_dim=6,
-    )
+    model_type = ckpt.get("model_type", "GlobalCNNLSTMForecaster")
+
+    if model_type == "TCNForecaster":
+        model = TCNForecaster(
+            temporal_dim=cfg.get("temporal_dim", 50),
+            static_dim=cfg.get("static_dim", 3),
+            num_wards=cfg.get("num_wards", 100),
+            seq_len=cfg.get("seq_len", 48),
+            channels=cfg.get("channels", 64),
+            dropout=0.0,
+            output_dim=6,
+        )
+    else:
+        # Legacy checkpoint
+        model = GlobalCNNLSTMForecaster(
+            temporal_dim=cfg.get("temporal_dim", 50),
+            static_dim=cfg.get("static_dim", 3),
+            num_wards=cfg.get("num_wards", 100),
+            seq_len=cfg.get("seq_len", 72),
+            hidden_dim=cfg.get("hidden_dim", 128),
+            num_layers=cfg.get("num_lstm_layers", 3),
+            dropout=0.0,
+            output_dim=6,
+        )
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     return model
@@ -204,11 +218,18 @@ def _predict_cnn_lstm(
     lat: float,
     lon: float,
 ) -> dict:
-    """CNN-LSTM inference path."""
+    """TCN / CNN-LSTM inference path."""
     from backend.app.services.ml.config import config as ml_config
     from backend.app.services.ml.features import get_input_feature_names, TARGET_COLS
 
-    seq_len = ml_config.seq_len  # 72
+    # Use seq_len from the loaded checkpoint config
+    import pickle as _pk
+    seq_len = ml_config.seq_len
+    try:
+        ckpt = torch.load(CNN_LSTM_PATH, map_location="cpu", weights_only=True)
+        seq_len = ckpt.get("config", {}).get("seq_len", seq_len)
+    except Exception:
+        pass
 
     if len(df_engineered) < seq_len:
         raise ValueError(

@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from typing import Tuple, Dict, List
 
 from backend.app.services.ml.config import config, MODELS_DIR
-from backend.app.services.ml.model import GlobalCNNLSTMForecaster
+from backend.app.services.ml.model import TCNForecaster
 
 logger = logging.getLogger(__name__)
 CHECKPOINT_PATH = os.path.join(MODELS_DIR, "global_model.pth")
@@ -27,8 +27,8 @@ def set_seed(seed: int = 42) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True
     logger.info(f"Random seed set to {seed}")
 
 
@@ -110,19 +110,14 @@ def train_model(
     static_dim: int,
     num_wards: int,
     checkpoint_path: str = CHECKPOINT_PATH,
-) -> Tuple[GlobalCNNLSTMForecaster, List[float], List[float]]:
+) -> Tuple[TCNForecaster, List[float], List[float]]:
     """
-    Trains the improved global CNN-LSTM forecasting model with:
-    - Huber loss (robust to PM2.5 spike outliers)
-    - Linear LR warmup for first config.warmup_epochs epochs
-    - CosineAnnealingWarmRestarts after warmup
-    - Best checkpoint saved only when val_loss strictly improves
-    - Early stopping with configurable patience
-    - AMP (automatic mixed precision) on CUDA
+    Trains the TCNForecaster with:
+    - Huber loss
+    - Linear LR warmup then CosineAnnealingWarmRestarts
+    - AdamW with weight decay
     - Gradient clipping
-    - Overfitting guard: warns when val/train ratio > 2.0 for 5 consecutive epochs
-
-    Returns the model loaded with best weights, train_losses, val_losses.
+    - Early stopping + overfitting guard
     """
     set_seed(config.random_seed)
 
@@ -130,13 +125,12 @@ def train_model(
     print(f"  Device: {device}")
     logger.info(f"Training on device: {device}")
 
-    model = GlobalCNNLSTMForecaster(
+    model = TCNForecaster(
         temporal_dim=temporal_dim,
         static_dim=static_dim,
         num_wards=num_wards,
         seq_len=config.seq_len,
-        hidden_dim=config.hidden_dim,
-        num_layers=config.num_lstm_layers,
+        channels=config.hidden_dim,
         dropout=config.dropout,
         output_dim=6,
     ).to(device)
@@ -144,7 +138,7 @@ def train_model(
     # Huber loss — quadratic for small residuals, linear for large spikes
     criterion = nn.HuberLoss(delta=config.huber_delta)
 
-    optimizer = optim.Adam(
+    optimizer = optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
@@ -212,6 +206,7 @@ def train_model(
             status = "[best]"
             checkpoint = {
                 "epoch": epoch,
+                "model_type": "TCNForecaster",
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "val_loss": best_val_loss,
@@ -219,8 +214,7 @@ def train_model(
                     "temporal_dim": temporal_dim,
                     "static_dim": static_dim,
                     "num_wards": num_wards,
-                    "hidden_dim": config.hidden_dim,
-                    "num_lstm_layers": config.num_lstm_layers,
+                    "channels": config.hidden_dim,
                     "dropout": config.dropout,
                     "seq_len": config.seq_len,
                 },
@@ -278,7 +272,7 @@ def train_model(
 
 
 def evaluate_on_test(
-    model: GlobalCNNLSTMForecaster,
+    model: TCNForecaster,
     test_loader: DataLoader,
     device: torch.device,
     scaler_y=None,
