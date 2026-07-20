@@ -33,8 +33,8 @@ export default function Navbar({
           <button className={`nav-link${isActive("/enforcement") ? " active" : ""}`} onClick={() => navigate("/enforcement")}>
             Municipal Command Center
           </button>
-          <button className={`nav-link${isActive("/predictor") ? " active" : ""}`} onClick={() => navigate("/predictor")}>
-            Predictor
+          <button className={`nav-link${isActive("/advisory") ? " active" : ""}`} onClick={() => navigate("/advisory")}>
+            Citizen AI Advisory
           </button>
         </nav>
       )}

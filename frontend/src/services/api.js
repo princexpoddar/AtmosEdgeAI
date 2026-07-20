@@ -77,6 +77,20 @@ export async function getRegionalAdvisory(stationId, lang = null) {
   return apiFetch(url);
 }
 
+export async function askCitizenAI({ stationId, query, lang = "en" }) {
+  const r = await fetch(`${API_BASE}/v1/advisories/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      station_id: String(stationId),
+      query: String(query),
+      lang: String(lang),
+    }),
+  });
+  if (!r.ok) throw new Error(`Citizen AI chat failed: ${r.status}`);
+  return r.json();
+}
+
 export async function getProviderDiagnostics() {
   return apiFetch(`${API_BASE}/v1/diagnostics/providers`);
 }

@@ -5,9 +5,9 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import Spinner from "@/components/ui/Spinner";
 import LandingPage from "@/pages/LandingPage";
 
-const Dashboard  = lazy(() => import("@/pages/Dashboard"));
-const Predictor  = lazy(() => import("@/pages/Predictor"));
-const Enforcement = lazy(() => import("@/pages/Enforcement"));
+const Dashboard       = lazy(() => import("@/pages/Dashboard"));
+const CitizenAdvisory = lazy(() => import("@/pages/CitizenAdvisory"));
+const Enforcement     = lazy(() => import("@/pages/Enforcement"));
 
 function PageFallback() {
   return (
@@ -27,7 +27,8 @@ export default function App() {
             <Routes>
               <Route path="/"            element={<LandingPage />} />
               <Route path="/dashboard"   element={<Dashboard />} />
-              <Route path="/predictor"   element={<Predictor />} />
+              <Route path="/advisory"    element={<CitizenAdvisory />} />
+              <Route path="/predictor"   element={<Navigate to="/advisory" replace />} />
               <Route path="/enforcement" element={<Enforcement />} />
               <Route path="*"            element={<Navigate to="/" replace />} />
             </Routes>

@@ -569,6 +569,39 @@ def get_multi_city_comparative_analytics(
 
 # ── Multi-Lingual Regional Health Advisory ────────────────────────────────────
 
+class CitizenChatRequest(BaseModel):
+    station_id: str
+    query: str
+    lang: Optional[str] = "en"
+    gemini_api_key: Optional[str] = None
+
+
+@router.post("/v1/advisories/chat", summary="Interactive multi-lingual citizen AI health advisor powered by Gemini 2.5 Flash")
+def citizen_ai_chat(
+    req: CitizenChatRequest,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Answers citizen queries regarding air safety, mask usage, outdoor sports, and health precautions
+    using Gemini 2.5 Flash API with real-time station telemetry and native script output.
+    """
+    try:
+        from backend.app.services.advisory import generate_chat_response
+        return generate_chat_response(
+            query=req.query,
+            station_id=req.station_id,
+            lang=req.lang or "en",
+            db=db,
+            gemini_api_key=req.gemini_api_key
+        )
+    except Exception as e:
+        logger.error("Citizen AI Chat failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Citizen AI Chat error: {e}",
+        )
+
+
 @router.get("/v1/advisories", summary="Station-level multi-lingual citizen health risk advisory")
 def get_station_regional_advisory(
     station_id: str,
