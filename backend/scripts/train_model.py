@@ -85,7 +85,7 @@ def main():
     os.makedirs(MODELS_DIR, exist_ok=True)
     with open(SPLITS_PATH, "wb") as f:
         pickle.dump({"train": splits["train"], "val": splits["val"], "test": splits["test"]}, f)
-    print(f"\n  Saved dataset splits → {SPLITS_PATH}")
+    print(f"\n  Saved dataset splits -> {SPLITS_PATH}")
 
     # ------------------------------------------------------------------
     # 2. Create DataLoaders
@@ -177,7 +177,7 @@ def main():
     metrics_path = os.path.join(MODELS_DIR, "metrics.json")
     with open(metrics_path, "w") as f:
         json.dump(test_metrics, f, indent=2)
-    print(f"\n  Saved test metrics → {metrics_path}")
+    print(f"\n  Saved test metrics -> {metrics_path}")
 
     # Save training curve metrics
     cnn_lstm_metrics = {
@@ -198,10 +198,10 @@ def main():
     print(f"  Overall RMSE (scaled)  : {test_metrics['overall_rmse']:.4f}")
     lr_baseline = 0.488
     if test_metrics["overall_mae"] < lr_baseline:
-        print(f"  ✓ Beats LR baseline ({lr_baseline}) by {lr_baseline - test_metrics['overall_mae']:.4f}")
+        print(f"  [PASS] Beats LR baseline ({lr_baseline}) by {lr_baseline - test_metrics['overall_mae']:.4f}")
     else:
         gap = test_metrics["overall_mae"] - lr_baseline
-        print(f"  ✗ Still {gap:.4f} above LR baseline ({lr_baseline}) — consider more epochs or tuning")
+        print(f"  [FAIL] Still {gap:.4f} above LR baseline ({lr_baseline}) -- consider more epochs or tuning")
     print(f"\n  Model checkpoint : {os.path.join(MODELS_DIR, 'global_model.pth')}")
     print(f"  Scalers          : {os.path.join(MODELS_DIR, 'global_scaler.pkl')}")
 
