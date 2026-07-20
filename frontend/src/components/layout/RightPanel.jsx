@@ -229,10 +229,10 @@ function RegionalAdvisoryCard({ stationId }) {
   ];
 
   return (
-    <div className="card" style={{ padding: 14, marginBottom: 16, background: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(59, 130, 246, 0.25)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa" }}>
-          🗣️ CITIZEN HEALTH RISK ADVISORY (MULTI-LINGUAL)
+    <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: 0.5, textTransform: "uppercase" }}>
+          🗣️ Citizen Health Advisory
         </span>
 
         {/* Language Switcher */}
@@ -240,14 +240,15 @@ function RegionalAdvisoryCard({ stationId }) {
           value={lang}
           onChange={(e) => setLang(e.target.value)}
           style={{
-            background: "rgba(15, 23, 42, 0.8)",
-            border: "1px solid rgba(255, 255, 255, 0.15)",
-            color: "#f8fafc",
-            padding: "4px 8px",
+            background: "var(--bg-3)",
+            border: "1px solid var(--border)",
+            color: "var(--text-1)",
+            padding: "4px 10px",
             borderRadius: 6,
             fontSize: 11,
             outline: "none",
-            cursor: "pointer"
+            cursor: "pointer",
+            fontWeight: 500
           }}
         >
           {languages.map((l) => (
@@ -262,20 +263,20 @@ function RegionalAdvisoryCard({ stationId }) {
         <Skeleton height="60px" />
       ) : advisory ? (
         <>
-          <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: 12, borderRadius: 8, borderLeft: "3px solid #38bdf8", marginBottom: 8 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#f8fafc", margin: 0, lineHeight: 1.5 }}>
+          <div style={{ background: "var(--bg-3)", padding: 12, borderRadius: "var(--radius-md)", borderLeft: "4px solid var(--accent)", marginBottom: 10 }}>
+            <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-1)", margin: 0, lineHeight: 1.5 }}>
               {advisory.advisory_message_regional}
             </p>
             {advisory.language !== "en" && (
-              <p style={{ fontSize: 11, color: "#94a3b8", margin: "4px 0 0 0", fontStyle: "italic" }}>
+              <p style={{ fontSize: 11, color: "var(--text-3)", margin: "6px 0 0 0", fontStyle: "italic", borderTop: "1px dashed var(--border)", paddingTop: 4 }}>
                 Translation: {advisory.advisory_message_english}
               </p>
             )}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#cbd5e1" }}>
-            <span>🏫 Catchment Alert: <strong>{advisory.sensitive_receptors_summary}</strong></span>
-            <span className="badge badge-outline" style={{ borderColor: "#a855f7", color: "#c084fc", fontSize: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-2)", flexWrap: "wrap", gap: 8 }}>
+            <span>🏫 Catchment Alert: <strong style={{ color: "var(--text-1)" }}>{advisory.sensitive_receptors_summary?.split("located")[0]?.trim()}</strong></span>
+            <span className="badge badge-outline" style={{ borderColor: "var(--purple)", color: "var(--purple)", fontSize: 10 }}>
               {advisory.spcb_authority}
             </span>
           </div>
