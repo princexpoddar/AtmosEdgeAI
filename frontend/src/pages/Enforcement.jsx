@@ -112,14 +112,15 @@ export default function Enforcement() {
               value={selectedStationId}
               onChange={(e) => setSelectedStationId(e.target.value)}
               style={{
-                background: "rgba(15, 23, 42, 0.8)",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
-                color: "#f8fafc",
+                background: "var(--bg-3)",
+                border: "1px solid var(--border)",
+                color: "var(--text-1)",
                 padding: "8px 14px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-md)",
                 fontSize: 13,
                 outline: "none",
-                cursor: "pointer"
+                cursor: "pointer",
+                fontWeight: 500
               }}
             >
               <option value="">🌐 All Monitoring Stations (City Overview)</option>
@@ -130,18 +131,18 @@ export default function Enforcement() {
               ))}
             </select>
 
-            <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", padding: 3, borderRadius: 8 }}>
+            <div style={{ display: "flex", background: "var(--bg-3)", border: "1px solid var(--border)", padding: 3, borderRadius: "var(--radius-md)" }}>
               <button
                 onClick={() => setActiveTab("dossier")}
                 className={`btn btn-xs ${activeTab === "dossier" ? "btn-primary" : "btn-ghost"}`}
-                style={{ fontSize: 12, padding: "6px 12px" }}
+                style={{ fontSize: 12, padding: "6px 12px", borderRadius: "var(--radius-sm)" }}
               >
                 🎯 Station Directives
               </button>
               <button
                 onClick={() => setActiveTab("comparative")}
                 className={`btn btn-xs ${activeTab === "comparative" ? "btn-primary" : "btn-ghost"}`}
-                style={{ fontSize: 12, padding: "6px 12px" }}
+                style={{ fontSize: 12, padding: "6px 12px", borderRadius: "var(--radius-sm)" }}
               >
                 📊 Multi-City Benchmarks
               </button>
@@ -150,7 +151,7 @@ export default function Enforcement() {
         </div>
 
         {filterLoading && (
-          <div style={{ padding: 12, background: "rgba(59, 130, 246, 0.1)", borderRadius: 8, color: "#60a5fa", fontSize: 13, marginBottom: 16 }}>
+          <div style={{ padding: 12, background: "var(--accent-dim)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", color: "var(--accent)", fontSize: 13, marginBottom: 16 }}>
             ⚡ Refreshing station dossier for selected station...
           </div>
         )}
@@ -257,10 +258,12 @@ export default function Enforcement() {
                             onClick={() => setSelectedStationId(st.station_id)}
                             style={{
                               cursor: "pointer",
-                              borderLeft: isSel ? "3px solid #3b82f6" : "none",
-                              background: isSel ? "rgba(59, 130, 246, 0.12)" : undefined,
-                              padding: "8px 10px",
-                              borderRadius: 6
+                              borderLeft: isSel ? "3px solid var(--accent)" : "1px solid var(--border)",
+                              background: isSel ? "var(--bg-4)" : "var(--bg-3)",
+                              borderColor: isSel ? "var(--accent)" : "var(--border)",
+                              padding: "10px 12px",
+                              borderRadius: 6,
+                              transition: "all 0.15s ease"
                             }}
                           >
                             <div>
