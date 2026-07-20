@@ -178,23 +178,23 @@ export default function Enforcement() {
 
             {/* Station Land-Use & Receptor Dossier Card (if station selected or top station) */}
             {selectedStationProfile && (
-              <div className="card" style={{ padding: "16px", marginBottom: "16px", background: "rgba(30, 41, 59, 0.7)", border: "1px solid rgba(59, 130, 246, 0.3)" }}>
+              <div className="card" style={{ padding: "16px", marginBottom: "16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
                   <div>
-                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#60a5fa" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--accent)" }}>
                       STATION LAND-USE DOSSIER & CATCHMENT RECEPTORS
                     </span>
-                    <h3 style={{ fontSize: 18, fontWeight: 700, margin: "4px 0", color: "#f8fafc" }}>
+                    <h3 style={{ fontSize: 17, fontWeight: 700, margin: "4px 0", color: "var(--text-1)" }}>
                       📍 {selectedStationProfile.station_name} ({selectedStationProfile.city})
                     </h3>
-                    <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                      <span className="badge badge-outline" style={{ borderColor: "#38bdf8", color: "#38bdf8" }}>
+                    <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                      <span className="badge badge-outline" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
                         🏢 {selectedStationProfile.land_use || "Mixed Zone"}
                       </span>
-                      <span className="badge badge-outline" style={{ borderColor: "#a855f7", color: "#c084fc" }}>
+                      <span className="badge badge-outline" style={{ borderColor: "var(--purple)", color: "var(--purple)" }}>
                         ⚖️ {selectedStationProfile.spcb_authority || "SPCB"}
                       </span>
-                      <span className="badge badge-outline" style={{ borderColor: "#f59e0b", color: "#fbbf24" }}>
+                      <span className="badge badge-outline" style={{ borderColor: "var(--yellow)", color: "var(--yellow)" }}>
                         🔥 Priority: {selectedStationProfile.priority} ({selectedStationProfile.score} pts)
                       </span>
                     </div>
@@ -202,20 +202,20 @@ export default function Enforcement() {
 
                   {/* Receptor Summary Pills */}
                   {selectedStationProfile.receptors && (
-                    <div style={{ display: "flex", gap: 12, alignItems: "center", background: "rgba(15, 23, 42, 0.6)", padding: "10px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div style={{ display: "flex", gap: 16, alignItems: "center", background: "var(--bg-3)", padding: "10px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}>
                       <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#f8fafc" }}>{selectedStationProfile.receptors.schools || 0}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8" }}>🏫 Schools</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>{selectedStationProfile.receptors.schools || 0}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600 }}>🏫 Schools</div>
                       </div>
-                      <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.1)" }} />
+                      <div style={{ width: 1, height: 24, background: "var(--border)" }} />
                       <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#f8fafc" }}>{selectedStationProfile.receptors.hospitals || 0}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8" }}>🏥 Hospitals</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>{selectedStationProfile.receptors.hospitals || 0}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600 }}>🏥 Hospitals</div>
                       </div>
-                      <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.1)" }} />
+                      <div style={{ width: 1, height: 24, background: "var(--border)" }} />
                       <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#ef4444" }}>{selectedStationProfile.receptors.vulnerability_level || "Medium"}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8" }}>Vulnerability</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--red)" }}>{selectedStationProfile.receptors.vulnerability_level || "Medium"}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600 }}>Vulnerability</div>
                       </div>
                     </div>
                   )}
@@ -223,10 +223,10 @@ export default function Enforcement() {
 
                 {/* Local Hotspots */}
                 {selectedStationProfile.registered_hotspots?.length > 0 && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed rgba(255,255,255,0.1)", fontSize: 13, color: "#cbd5e1" }}>
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--border)", fontSize: 12, color: "var(--text-2)" }}>
                     <strong>🎯 Registered Catchment Hotspots:</strong>{" "}
                     {selectedStationProfile.registered_hotspots.map((h, i) => (
-                      <span key={i} style={{ background: "rgba(255,255,255,0.08)", padding: "2px 8px", borderRadius: 4, marginRight: 6, fontSize: 12 }}>
+                      <span key={i} style={{ background: "var(--bg-3)", border: "1px solid var(--border)", padding: "2px 8px", borderRadius: 4, marginRight: 6, fontSize: 11, color: "var(--text-1)" }}>
                         • {h}
                       </span>
                     ))}
