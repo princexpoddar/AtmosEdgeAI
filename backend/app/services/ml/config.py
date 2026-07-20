@@ -24,16 +24,19 @@ class MLConfig:
 
         
         # Training config
-        self.seq_len: int = 24
+        self.seq_len: int = 72
         self.learning_rate: float = 0.001
-        self.batch_size: int = 128
-        self.epochs: int = 50
-        self.patience: int = 8
+        self.batch_size: int = 256
+        self.epochs: int = 150
+        self.patience: int = 25
         self.grad_clip: float = 1.0
-        self.hidden_dim: int = 64
-        self.num_lstm_layers: int = 2
-        self.dropout: float = 0.2
-        self.weight_decay: float = 1e-4
+        self.hidden_dim: int = 128
+        self.num_lstm_layers: int = 3
+        self.dropout: float = 0.35
+        self.weight_decay: float = 5e-4
+        self.warmup_epochs: int = 5
+        self.huber_delta: float = 1.0
+        self.k_neighbours: int = 3
         self.random_seed: int = 42
         
         self.load_config()
@@ -71,6 +74,9 @@ class MLConfig:
             self.num_lstm_layers = int(training.get("num_lstm_layers", self.num_lstm_layers))
             self.dropout = float(training.get("dropout", self.dropout))
             self.weight_decay = float(training.get("weight_decay", self.weight_decay))
+            self.warmup_epochs = int(training.get("warmup_epochs", self.warmup_epochs))
+            self.huber_delta = float(training.get("huber_delta", self.huber_delta))
+            self.k_neighbours = int(training.get("k_neighbours", self.k_neighbours))
             self.random_seed = int(training.get("random_seed", self.random_seed))
             
             logger.info(f"Successfully loaded ML config from {self.config_path}")

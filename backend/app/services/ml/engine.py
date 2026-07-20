@@ -14,6 +14,11 @@ from backend.app.services.ml.model import GlobalCNNLSTMForecaster
 logger = logging.getLogger(__name__)
 CHECKPOINT_PATH = os.path.join(MODELS_DIR, "global_model.pth")
 
+# Overfitting detection constants
+_OVERFIT_RATIO_THRESHOLD = 2.0
+_OVERFIT_WINDOW = 5
+_OVERFIT_START_EPOCH = 10
+
 
 def set_seed(seed: int = 42) -> None:
     """Sets random seeds for full reproducibility."""
@@ -29,14 +34,15 @@ def set_seed(seed: int = 42) -> None:
 
 class EarlyStopping:
     """
-    Stops training when val_loss does not improve by min_delta for `patience` consecutive epochs.
-    Resets counter on every new best.
+    Stops training when val_loss does not improve by min_delta for `patience`
+    consecutive epochs. Resets counter on every new best.
     """
+
     def __init__(self, patience: int = 10, min_delta: float = 1e-5):
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
-        self.best_loss = float('inf')
+        self.best_loss = float("inf")
         self.early_stop = False
 
     def check(self, val_loss: float) -> bool:
@@ -58,11 +64,11 @@ def _run_epoch(
     scaler,
     device: torch.device,
     use_amp: bool,
-    is_train: bool
+    is_train: bool,
 ) -> float:
     """
     Runs a single train or validation epoch.
-    Returns average MSE loss over the full dataset.
+    Returns average Huber loss over the full dataset.
     """
     model.train() if is_train else model.eval()
     total_loss = 0.0
@@ -71,10 +77,10 @@ def _run_epoch(
     ctx = torch.enable_grad if is_train else torch.no_grad
     with ctx():
         for batch_x_temp, batch_x_ward, batch_x_static, batch_y in loader:
-            batch_x_temp  = batch_x_temp.to(device)
-            batch_x_ward  = batch_x_ward.to(device)
+            batch_x_temp = batch_x_temp.to(device)
+            batch_x_ward = batch_x_ward.to(device)
             batch_x_static = batch_x_static.to(device)
-            batch_y       = batch_y.to(device)
+            batch_y = batch_y.to(device)
             bs = batch_x_temp.size(0)
 
             if is_train:
@@ -92,7 +98,7 @@ def _run_epoch(
                 scaler.update()
 
             total_loss += loss.item() * bs
-            n_samples  += bs
+            n_samples += bs
 
     return total_loss / max(n_samples, 1)
 
@@ -103,15 +109,18 @@ def train_model(
     temporal_dim: int,
     static_dim: int,
     num_wards: int,
-    checkpoint_path: str = CHECKPOINT_PATH
+    checkpoint_path: str = CHECKPOINT_PATH,
 ) -> Tuple[GlobalCNNLSTMForecaster, List[float], List[float]]:
     """
-    Trains the global CNN-LSTM forecasting model with:
-    - Per-epoch train/val loss logging (console + logger)
+    Trains the improved global CNN-LSTM forecasting model with:
+    - Huber loss (robust to PM2.5 spike outliers)
+    - Linear LR warmup for first config.warmup_epochs epochs
+    - CosineAnnealingWarmRestarts after warmup
     - Best checkpoint saved only when val_loss strictly improves
     - Early stopping with configurable patience
     - AMP (automatic mixed precision) on CUDA
     - Gradient clipping
+    - Overfitting guard: warns when val/train ratio > 2.0 for 5 consecutive epochs
 
     Returns the model loaded with best weights, train_losses, val_losses.
     """
@@ -129,55 +138,73 @@ def train_model(
         hidden_dim=config.hidden_dim,
         num_layers=config.num_lstm_layers,
         dropout=config.dropout,
-        output_dim=6
+        output_dim=6,
     ).to(device)
 
-    criterion = nn.MSELoss()
+    # Huber loss — quadratic for small residuals, linear for large spikes
+    criterion = nn.HuberLoss(delta=config.huber_delta)
+
     optimizer = optim.Adam(
         model.parameters(),
         lr=config.learning_rate,
-        weight_decay=config.weight_decay
+        weight_decay=config.weight_decay,
     )
-    # CosineAnnealingWarmRestarts: restarts every T_0 epochs, avoids premature LR decay
-    # that ReduceLROnPlateau caused at epoch 9 when val loss briefly dipped.
+
+    # Linear warmup scheduler (epochs 1 .. warmup_epochs)
+    warmup_epochs = config.warmup_epochs
+
+    def _warmup_lambda(epoch: int) -> float:
+        if epoch < warmup_epochs:
+            return float(epoch + 1) / float(max(warmup_epochs, 1))
+        return 1.0
+
+    warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_warmup_lambda)
+
+    # Cosine annealing after warmup (T_0 chosen relative to patience)
     T_0 = max(10, config.patience // 2)
-    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+    cosine_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer, T_0=T_0, T_mult=2, eta_min=1e-6
     )
+
     early_stopper = EarlyStopping(patience=config.patience)
 
-    use_amp = (device.type == "cuda")
-    scaler = torch.amp.GradScaler(device=device.type, enabled=use_amp)
+    use_amp = device.type == "cuda"
+    grad_scaler = torch.amp.GradScaler(device=device.type, enabled=use_amp)
 
     train_losses: List[float] = []
-    val_losses:   List[float] = []
-    best_val_loss = float('inf')
+    val_losses: List[float] = []
+    best_val_loss = float("inf")
     best_epoch = 0
 
-    print(f"\n  {'Epoch':>6} | {'Train MSE':>10} | {'Val MSE':>10} | {'LR':>10} | Status")
-    print(f"  {'-'*6}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}")
+    print(f"\n  {'Epoch':>6} | {'Train':>10} | {'Val':>10} | {'V/T Ratio':>10} | {'LR':>10} | Status")
+    print(f"  {'-'*6}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}-+-{'-'*8}")
 
     for epoch in range(1, config.epochs + 1):
-        # --- Training pass ---
+        # Training pass
         epoch_train = _run_epoch(
             model, train_loader, criterion, optimizer,
-            scaler, device, use_amp, is_train=True
+            grad_scaler, device, use_amp, is_train=True,
         )
 
-        # --- Validation pass ---
+        # Validation pass
         epoch_val = _run_epoch(
             model, val_loader, criterion, optimizer,
-            scaler, device, use_amp, is_train=False
+            grad_scaler, device, use_amp, is_train=False,
         )
 
         train_losses.append(epoch_train)
         val_losses.append(epoch_val)
 
-        # CosineAnnealingWarmRestarts uses the epoch count, not val loss
-        scheduler.step(epoch - 1)
-        current_lr = optimizer.param_groups[0]['lr']
+        # Step schedulers
+        if epoch <= warmup_epochs:
+            warmup_scheduler.step()
+        else:
+            cosine_scheduler.step(epoch - warmup_epochs - 1)
+        current_lr = optimizer.param_groups[0]["lr"]
 
-        # --- Save best checkpoint strictly on val_loss improvement ---
+        vt_ratio = epoch_val / max(epoch_train, 1e-8)
+
+        # Save best checkpoint on strict val_loss improvement
         status = ""
         if epoch_val < best_val_loss:
             best_val_loss = epoch_val
@@ -187,7 +214,6 @@ def train_model(
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "scheduler_state_dict": scheduler.state_dict(),
                 "val_loss": best_val_loss,
                 "config": {
                     "temporal_dim": temporal_dim,
@@ -196,8 +222,8 @@ def train_model(
                     "hidden_dim": config.hidden_dim,
                     "num_lstm_layers": config.num_lstm_layers,
                     "dropout": config.dropout,
-                    "seq_len": config.seq_len
-                }
+                    "seq_len": config.seq_len,
+                },
             }
             try:
                 os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
@@ -206,20 +232,39 @@ def train_model(
             except Exception as e:
                 logger.error(f"Failed saving checkpoint: {e}")
 
-        # --- Console epoch log ---
-        print(f"  {epoch:>6} | {epoch_train:>10.6f} | {epoch_val:>10.6f} | {current_lr:>10.2e} | {status}")
+        # Console epoch log
+        print(
+            f"  {epoch:>6} | {epoch_train:>10.6f} | {epoch_val:>10.6f} | "
+            f"{vt_ratio:>10.3f} | {current_lr:>10.2e} | {status}"
+        )
         logger.info(
             f"Epoch {epoch}/{config.epochs} | Train={epoch_train:.6f} | Val={epoch_val:.6f} | "
-            f"LR={current_lr:.2e} | BestValEpoch={best_epoch}"
+            f"V/T={vt_ratio:.3f} | LR={current_lr:.2e} | BestValEpoch={best_epoch}"
         )
 
-        # --- Early stopping ---
+        # Overfitting guard: warn when val/train > 2.0 for _OVERFIT_WINDOW consecutive epochs
+        if epoch >= _OVERFIT_START_EPOCH and len(train_losses) >= _OVERFIT_WINDOW:
+            recent_vt = [
+                v / max(t, 1e-8)
+                for v, t in zip(
+                    val_losses[-_OVERFIT_WINDOW:],
+                    train_losses[-_OVERFIT_WINDOW:],
+                )
+            ]
+            if all(r > _OVERFIT_RATIO_THRESHOLD for r in recent_vt):
+                logger.warning(
+                    f"overfitting detected: val/train ratio > {_OVERFIT_RATIO_THRESHOLD} "
+                    f"for {_OVERFIT_WINDOW} consecutive epochs "
+                    f"(latest ratios: {[round(r, 2) for r in recent_vt]})"
+                )
+
+        # Early stopping
         if early_stopper.check(epoch_val):
-            print(f"\n  Early stopping triggered at epoch {epoch} (no improvement for {config.patience} epochs).")
+            print(f"\n  Early stopping at epoch {epoch} (no improvement for {config.patience} epochs).")
             logger.info(f"Early stopping at epoch {epoch}")
             break
 
-    # --- Reload best weights before returning ---
+    # Reload best weights before returning
     if os.path.exists(checkpoint_path):
         try:
             ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
@@ -236,14 +281,16 @@ def evaluate_on_test(
     model: GlobalCNNLSTMForecaster,
     test_loader: DataLoader,
     device: torch.device,
-    use_amp: bool = False
+    scaler_y=None,
+    use_amp: bool = False,
 ) -> Dict[str, float]:
     """
     Evaluates the best-checkpoint model on the untouched test set.
-    Called exactly ONCE after training is complete.
-    Returns per-horizon MAE and RMSE for PM2.5 and NO2.
+    Returns per-horizon MAE and RMSE in both scaled and unscaled units.
+
+    Pass scaler_y to get unscaled MAE and R² alongside scaled metrics.
     """
-    from sklearn.metrics import mean_absolute_error, mean_squared_error
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
     model.eval()
     all_preds = []
@@ -251,8 +298,8 @@ def evaluate_on_test(
 
     with torch.no_grad():
         for batch_x_temp, batch_x_ward, batch_x_static, batch_y in test_loader:
-            batch_x_temp  = batch_x_temp.to(device)
-            batch_x_ward  = batch_x_ward.to(device)
+            batch_x_temp = batch_x_temp.to(device)
+            batch_x_ward = batch_x_ward.to(device)
             batch_x_static = batch_x_static.to(device)
 
             with torch.amp.autocast(device_type=device.type, enabled=use_amp):
@@ -261,28 +308,52 @@ def evaluate_on_test(
             all_preds.append(outputs.cpu().numpy())
             all_targets.append(batch_y.numpy())
 
-    preds   = np.vstack(all_preds)    # (N, 6)
+    preds = np.vstack(all_preds)    # (N, 6)
     targets = np.vstack(all_targets)  # (N, 6)
 
     names = ["pm25_24h", "pm25_48h", "pm25_72h", "no2_24h", "no2_48h", "no2_72h"]
-    metrics = {}
-    for i, name in enumerate(names):
-        mae  = float(mean_absolute_error(targets[:, i], preds[:, i]))
-        rmse = float(np.sqrt(mean_squared_error(targets[:, i], preds[:, i])))
-        metrics[f"{name}_mae"]  = mae
-        metrics[f"{name}_rmse"] = rmse
+    metrics: Dict[str, float] = {}
 
-    # Summarize
-    pm25_mae = float(np.mean([metrics["pm25_24h_mae"], metrics["pm25_48h_mae"], metrics["pm25_72h_mae"]]))
-    no2_mae  = float(np.mean([metrics["no2_24h_mae"],  metrics["no2_48h_mae"],  metrics["no2_72h_mae"]]))
+    for i, name in enumerate(names):
+        mae = float(mean_absolute_error(targets[:, i], preds[:, i]))
+        rmse = float(np.sqrt(mean_squared_error(targets[:, i], preds[:, i])))
+        r2 = float(r2_score(targets[:, i], preds[:, i]))
+        metrics[f"{name}_mae"] = mae
+        metrics[f"{name}_rmse"] = rmse
+        metrics[f"{name}_r2"] = r2
+
+    # Unscaled metrics using scaler_y
+    if scaler_y is not None:
+        pm25_mean, pm25_std = float(scaler_y.mean_[0]), float(scaler_y.scale_[0])
+        no2_mean,  no2_std  = float(scaler_y.mean_[1]), float(scaler_y.scale_[1])
+
+        preds_unscaled = preds.copy()
+        targets_unscaled = targets.copy()
+
+        for col in range(3):   # pm25 horizons
+            preds_unscaled[:, col]   = preds[:, col]   * pm25_std + pm25_mean
+            targets_unscaled[:, col] = targets[:, col] * pm25_std + pm25_mean
+        for col in range(3, 6):  # no2 horizons
+            preds_unscaled[:, col]   = preds[:, col]   * no2_std  + no2_mean
+            targets_unscaled[:, col] = targets[:, col] * no2_std  + no2_mean
+
+        for i, name in enumerate(names):
+            u_mae = float(mean_absolute_error(targets_unscaled[:, i], preds_unscaled[:, i]))
+            u_r2  = float(r2_score(targets_unscaled[:, i], preds_unscaled[:, i]))
+            metrics[f"{name}_unscaled_mae"] = u_mae
+            metrics[f"{name}_unscaled_r2"]  = u_r2
+
+    # Aggregate scaled summaries
+    pm25_mae  = float(np.mean([metrics["pm25_24h_mae"],  metrics["pm25_48h_mae"],  metrics["pm25_72h_mae"]]))
+    no2_mae   = float(np.mean([metrics["no2_24h_mae"],   metrics["no2_48h_mae"],   metrics["no2_72h_mae"]]))
     pm25_rmse = float(np.mean([metrics["pm25_24h_rmse"], metrics["pm25_48h_rmse"], metrics["pm25_72h_rmse"]]))
     no2_rmse  = float(np.mean([metrics["no2_24h_rmse"],  metrics["no2_48h_rmse"],  metrics["no2_72h_rmse"]]))
 
-    metrics["pm25_avg_mae"]    = pm25_mae
-    metrics["no2_avg_mae"]     = no2_mae
-    metrics["pm25_avg_rmse"]   = pm25_rmse
-    metrics["no2_avg_rmse"]    = no2_rmse
-    metrics["overall_mae"]     = float(np.mean([pm25_mae, no2_mae]))
-    metrics["overall_rmse"]    = float(np.mean([pm25_rmse, no2_rmse]))
+    metrics["pm25_avg_mae"]  = pm25_mae
+    metrics["no2_avg_mae"]   = no2_mae
+    metrics["pm25_avg_rmse"] = pm25_rmse
+    metrics["no2_avg_rmse"]  = no2_rmse
+    metrics["overall_mae"]   = float(np.mean([pm25_mae, no2_mae]))
+    metrics["overall_rmse"]  = float(np.mean([pm25_rmse, no2_rmse]))
 
     return metrics

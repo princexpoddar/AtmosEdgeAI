@@ -35,16 +35,19 @@
     }
   },
   "training": {
-    "seq_len": 24,
+    "seq_len": 72,
     "learning_rate": 0.001,
     "batch_size": 256,
-    "epochs": 100,
-    "patience": 20,
+    "epochs": 150,
+    "patience": 25,
     "grad_clip": 1.0,
-    "hidden_dim": 64,
-    "num_lstm_layers": 2,
-    "dropout": 0.3,
-    "weight_decay": 2e-4,
+    "hidden_dim": 128,
+    "num_lstm_layers": 3,
+    "dropout": 0.35,
+    "weight_decay": 5e-4,
+    "warmup_epochs": 5,
+    "huber_delta": 1.0,
+    "k_neighbours": 3,
     "random_seed": 42
   },
   "station_selection": {
