@@ -154,10 +154,10 @@ def train_model(
 
     warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_warmup_lambda)
 
-    # Cosine annealing after warmup (T_0 chosen relative to patience)
-    T_0 = max(10, config.patience // 2)
+    # Cosine annealing after warmup — T_0=30 gives full cycles, T_mult=1 keeps them equal
+    T_0 = 30
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer, T_0=T_0, T_mult=2, eta_min=1e-6
+        optimizer, T_0=T_0, T_mult=1, eta_min=1e-5
     )
 
     early_stopper = EarlyStopping(patience=config.patience)

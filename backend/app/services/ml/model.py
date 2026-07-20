@@ -43,7 +43,7 @@ class TCNForecaster(nn.Module):
     """
     def __init__(self, temporal_dim: int, static_dim: int, num_wards: int = 100,
                  embedding_dim: int = 16, seq_len: int = 48, channels: int = 64,
-                 kernel_size: int = 3, num_levels: int = 3, dropout: float = 0.5,
+                 kernel_size: int = 3, num_levels: int = 4, dropout: float = 0.4,
                  output_dim: int = 6):
         super().__init__()
         self.ward_embedding = nn.Embedding(num_wards, embedding_dim)
