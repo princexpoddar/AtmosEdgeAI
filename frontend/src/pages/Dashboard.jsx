@@ -72,8 +72,8 @@ export default function Dashboard() {
         onToggleAlerts={() => setShowAlertPanel((v) => !v)}
       />
 
-      {error && <Banner variant="error">⚠ {error}</Banner>}
-      {syncOk && <Banner variant="success">✓ Updated CPCB live measurements. Refreshing…</Banner>}
+      {error && <Banner variant="error">{error}</Banner>}
+      {syncOk && <Banner variant="success">Updated CPCB live measurements. Refreshing…</Banner>}
 
       <div className="dashboard-grid">
         {/* Map column */}

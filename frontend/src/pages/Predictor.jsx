@@ -143,7 +143,7 @@ export default function Predictor({ stations: propStations }) {
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="pred-header">
           <div>
-            <div className="pred-header-eyebrow">⚗ Spatiotemporal ML Engine</div>
+            <div className="pred-header-eyebrow">Spatiotemporal ML Engine</div>
             <h1 className="pred-header-title">AI Pollution Predictor</h1>
             <p className="pred-header-sub">
               Live inference using the deployed Ridge Regression model with 50-feature
@@ -176,7 +176,6 @@ export default function Predictor({ stations: propStations }) {
             {/* Config card */}
             <div className="pred-config-card">
               <div className="pred-config-header">
-                <span className="pred-config-icon">🎯</span>
                 <div>
                   <h3 className="pred-config-title">Configure Prediction</h3>
                   <p className="pred-config-sub">Select a monitoring station and forecast window</p>
@@ -185,7 +184,7 @@ export default function Predictor({ stations: propStations }) {
 
               {error && (
                 <div className="pred-error-banner">
-                  ⚠ {error}
+                  {error}
                 </div>
               )}
 
@@ -196,7 +195,6 @@ export default function Predictor({ stations: propStations }) {
                 </div>
               ) : stations.length === 0 ? (
                 <div className="pred-empty-state">
-                  <span className="pred-empty-icon">📡</span>
                   <p>No monitoring stations found.</p>
                   <button className="btn btn-secondary btn-sm" onClick={() => navigate("/dashboard")}>
                     Go to Dashboard
@@ -253,7 +251,6 @@ export default function Predictor({ stations: propStations }) {
                       </>
                     ) : (
                       <>
-                        <span className="pred-submit-icon">⚡</span>
                         <span>Generate AI Prediction</span>
                       </>
                     )}
@@ -289,7 +286,6 @@ export default function Predictor({ stations: propStations }) {
 
                 {/* Health advisory */}
                 <div className="pred-advisory" style={{ borderColor: color + "44", background: color + "0d" }}>
-                  <span className="pred-advisory-icon">💡</span>
                   <p>{tip}</p>
                 </div>
               </div>
@@ -301,7 +297,7 @@ export default function Predictor({ stations: propStations }) {
 
             {/* Model info */}
             <div className="pred-info-card">
-              <h4 className="pred-info-title">🧠 Model Architecture</h4>
+              <h4 className="pred-info-title">Model Architecture</h4>
               <div className="pred-info-rows">
                 {[
                   { k: "Algorithm",      v: "Ridge Regression (50-feature spatial)" },
@@ -320,7 +316,7 @@ export default function Predictor({ stations: propStations }) {
 
             {/* AQI scale legend */}
             <div className="pred-info-card">
-              <h4 className="pred-info-title">📊 CPCB AQI Scale Reference</h4>
+              <h4 className="pred-info-title">CPCB AQI Scale Reference</h4>
               <div className="pred-aqi-scale">
                 {[
                   { range: "0–50",   label: "Good",         color: "#10b981", bg: "rgba(16,185,129,0.1)" },
@@ -345,16 +341,15 @@ export default function Predictor({ stations: propStations }) {
 
             {/* Data source pills */}
             <div className="pred-info-card">
-              <h4 className="pred-info-title">🔗 Data Pipeline</h4>
+              <h4 className="pred-info-title">Data Pipeline</h4>
               <div className="pred-pipeline">
                 {[
-                  { icon: "🏛", label: "CPCB data.gov.in API",   sub: "Live PM2.5 / NO₂" },
-                  { icon: "🌤", label: "Open-Meteo",              sub: "Weather features" },
-                  { icon: "🛰", label: "NASA FIRMS",              sub: "Fire hotspot data" },
-                  { icon: "🗄", label: "SQLite Store",            sub: "Hourly ingestion cache" },
-                ].map(({ icon, label, sub }) => (
+                  { label: "CPCB data.gov.in API",   sub: "Live PM2.5 / NO₂" },
+                  { label: "Open-Meteo",              sub: "Weather features" },
+                  { label: "NASA FIRMS",              sub: "Fire hotspot data" },
+                  { label: "SQLite Store",            sub: "Hourly ingestion cache" },
+                ].map(({ label, sub }) => (
                   <div key={label} className="pred-pipeline-item">
-                    <div className="pred-pipeline-icon">{icon}</div>
                     <div>
                       <div className="pred-pipeline-label">{label}</div>
                       <div className="pred-pipeline-sub">{sub}</div>

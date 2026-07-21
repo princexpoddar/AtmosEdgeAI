@@ -6,21 +6,21 @@ import Spinner from "@/components/ui/Spinner";
 import { Send, Bot } from "lucide-react";
 
 const LANGUAGES = [
-  { code: "en", label: "English", icon: "🌐" },
-  { code: "kn", label: "ಕನ್ನಡ", icon: "💛" },
-  { code: "ta", label: "தமிழ்", icon: "❤️" },
-  { code: "hi", label: "हिंदी", icon: "🧡" },
-  { code: "mr", label: "मराठी", icon: "💙" },
-  { code: "bn", label: "বাংলা", icon: "💚" },
+  { code: "en", label: "English" },
+  { code: "kn", label: "ಕನ್ನಡ" },
+  { code: "ta", label: "தமிழ்" },
+  { code: "hi", label: "हिंदी" },
+  { code: "mr", label: "मराठी" },
+  { code: "bn", label: "বাংলা" },
 ];
 
 const PROMPT_CHIPS = [
-  { text: "Can I go for an outdoor morning run today?", icon: "🏃" },
-  { text: "Is it safe for young children and elderly outside?", icon: "👶" },
-  { text: "Do I need to wear an N95 mask for my commute?", icon: "😷" },
-  { text: "What precautions for asthma patients today?", icon: "🫁" },
-  { text: "Are outdoor construction workers safe here?", icon: "🏗️" },
-  { text: "Is it safe to open windows at home?", icon: "🏠" },
+  { text: "Can I go for an outdoor morning run today?" },
+  { text: "Is it safe for young children and elderly outside?" },
+  { text: "Do I need to wear an N95 mask for my commute?" },
+  { text: "What precautions for asthma patients today?" },
+  { text: "Are outdoor construction workers safe here?" },
+  { text: "Is it safe to open windows at home?" },
 ];
 
 function formatMessageText(text) {
@@ -138,7 +138,7 @@ export default function CitizenAdvisory() {
         ...prev,
         {
           sender: "ai",
-          text: "⚠️ Unable to reach Gemini AI engine. Please verify server connectivity.",
+          text: "Unable to reach Gemini AI engine. Please verify server connectivity.",
           model: "Error",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
@@ -159,7 +159,7 @@ export default function CitizenAdvisory() {
         {/* Page Title Header */}
         <div style={{ marginBottom: 16 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
-            🗣️ Citizen Health Risk Advisory System
+            Citizen Health Risk Advisory System
           </h2>
           <p style={{ fontSize: 13, color: "var(--text-2)", margin: "3px 0 0 0" }}>
             Real-Time Multi-Lingual Citizen Environmental Health Advisor — Powered by Google Gemini 2.5 Flash
@@ -261,7 +261,7 @@ export default function CitizenAdvisory() {
               </div>
               {selectedLang !== "en" && (
                 <p style={{ fontSize: 11, color: "var(--accent)", margin: "10px 0 0 0", background: "var(--accent-dim)", borderRadius: "var(--radius-sm)", padding: "6px 8px" }}>
-                  ✓ AI will respond in {activeLang?.label} script for your next question
+                  AI will respond in {activeLang?.label} script for your next question
                 </p>
               )}
             </div>
@@ -288,7 +288,7 @@ export default function CitizenAdvisory() {
 
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span className="badge badge-outline" style={{ color: "var(--accent)", borderColor: "var(--accent)" }}>
-                  {activeLang?.icon} {activeLang?.label}
+                  {activeLang?.label}
                 </span>
               </div>
             </div>
@@ -305,7 +305,7 @@ export default function CitizenAdvisory() {
                   <div className="chat-bubble-meta">
                     {msg.sender === "user"
                       ? `You • ${msg.time}`
-                      : `🤖 ${msg.model} • ${msg.time}${msg.lang && msg.lang !== "en" ? ` • ${LANGUAGES.find(l => l.code === msg.lang)?.label}` : ""}`}
+                      : `${msg.model} • ${msg.time}${msg.lang && msg.lang !== "en" ? ` • ${LANGUAGES.find(l => l.code === msg.lang)?.label}` : ""}`}
                   </div>
                 </div>
               ))}

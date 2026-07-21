@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8001") + "/api";
+const API_BASE = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000") + "/api";
 
 async function apiFetch(url, options = {}) {
   const r = await fetch(url, options);

@@ -62,7 +62,6 @@ export default function Enforcement() {
         <Navbar />
         <div className="enforcement-page">
           <div className="enforcement-error-card">
-            <div className="enforcement-error-icon">⚠️</div>
             <h3 className="enforcement-error-title">Unable to load Municipal Command Center</h3>
             <p className="enforcement-error-msg">{error}</p>
             {refetch && (
@@ -99,7 +98,7 @@ export default function Enforcement() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
-              🏛️ Municipal Enforcement Command Center
+              Municipal Enforcement Command Center
             </h2>
             <p style={{ fontSize: 13, color: "var(--text-2)", margin: "2px 0 0 0" }}>
               Hyperlocal Evidence-Backed Directives, Station Land-Use Dossiers & Multi-City Benchmarks
@@ -123,7 +122,7 @@ export default function Enforcement() {
                 fontWeight: 500
               }}
             >
-              <option value="">🌐 All Monitoring Stations (City Overview)</option>
+              <option value="">All Monitoring Stations (City Overview)</option>
               {globalData?.priority_rankings?.map((st) => (
                 <option key={st.station_id} value={st.station_id}>
                   📍 {st.station_name} ({st.city}) — [{st.priority}]
@@ -137,14 +136,14 @@ export default function Enforcement() {
                 className={`btn btn-xs ${activeTab === "dossier" ? "btn-primary" : "btn-ghost"}`}
                 style={{ fontSize: 12, padding: "6px 12px", borderRadius: "var(--radius-sm)" }}
               >
-                🎯 Station Directives
+                Station Directives
               </button>
               <button
                 onClick={() => setActiveTab("comparative")}
                 className={`btn btn-xs ${activeTab === "comparative" ? "btn-primary" : "btn-ghost"}`}
                 style={{ fontSize: 12, padding: "6px 12px", borderRadius: "var(--radius-sm)" }}
               >
-                📊 Multi-City Benchmarks
+                Multi-City Benchmarks
               </button>
             </div>
           </div>
@@ -152,7 +151,7 @@ export default function Enforcement() {
 
         {filterLoading && (
           <div style={{ padding: 12, background: "var(--accent-dim)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", color: "var(--accent)", fontSize: 13, marginBottom: 16 }}>
-            ⚡ Refreshing station dossier for selected station...
+            Refreshing station dossier for selected station...
           </div>
         )}
 
@@ -190,13 +189,13 @@ export default function Enforcement() {
                     </h3>
                     <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                       <span className="badge badge-outline" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
-                        🏢 {selectedStationProfile.land_use || "Mixed Zone"}
+                        {selectedStationProfile.land_use || "Mixed Zone"}
                       </span>
                       <span className="badge badge-outline" style={{ borderColor: "var(--purple)", color: "var(--purple)" }}>
-                        ⚖️ {selectedStationProfile.spcb_authority || "SPCB"}
+                        {selectedStationProfile.spcb_authority || "SPCB"}
                       </span>
                       <span className="badge badge-outline" style={{ borderColor: "var(--yellow)", color: "var(--yellow)" }}>
-                        🔥 Priority: {selectedStationProfile.priority} ({selectedStationProfile.score} pts)
+                        Priority: {selectedStationProfile.priority} ({selectedStationProfile.score} pts)
                       </span>
                     </div>
                   </div>
@@ -206,12 +205,12 @@ export default function Enforcement() {
                     <div style={{ display: "flex", gap: 16, alignItems: "center", background: "var(--bg-3)", padding: "10px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}>
                       <div style={{ textAlign: "center" }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>{selectedStationProfile.receptors.schools || 0}</div>
-                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600 }}>🏫 Schools</div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600 }}>Schools</div>
                       </div>
                       <div style={{ width: 1, height: 24, background: "var(--border)" }} />
                       <div style={{ textAlign: "center" }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>{selectedStationProfile.receptors.hospitals || 0}</div>
-                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600 }}>🏥 Hospitals</div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600 }}>Hospitals</div>
                       </div>
                       <div style={{ width: 1, height: 24, background: "var(--border)" }} />
                       <div style={{ textAlign: "center" }}>
@@ -225,7 +224,7 @@ export default function Enforcement() {
                 {/* Local Hotspots */}
                 {selectedStationProfile.registered_hotspots?.length > 0 && (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--border)", fontSize: 12, color: "var(--text-2)" }}>
-                    <strong>🎯 Registered Catchment Hotspots:</strong>{" "}
+                    <strong>Registered Catchment Hotspots:</strong>{" "}
                     {selectedStationProfile.registered_hotspots.map((h, i) => (
                       <span key={i} style={{ background: "var(--bg-3)", border: "1px solid var(--border)", padding: "2px 8px", borderRadius: 4, marginRight: 6, fontSize: 11, color: "var(--text-1)" }}>
                         • {h}
@@ -289,19 +288,19 @@ export default function Enforcement() {
                   <h4 className="card-title">Hotspot Classifications</h4>
                   <div className="hotspot-list">
                     <div className="hotspot-row">
-                      <span>🔥 Deteriorating</span>
+                      <span>Deteriorating</span>
                       <strong>{hotspots.deteriorating?.[0]?.station_name ?? "None"}</strong>
                     </div>
                     <div className="hotspot-row">
-                      <span>📈 Highest Priority</span>
+                      <span>Highest Priority</span>
                       <strong>{hotspots.highest_priority?.[0]?.station_name ?? "None"}</strong>
                     </div>
                     <div className="hotspot-row">
-                      <span>🍃 Improving</span>
+                      <span>Improving</span>
                       <strong>{hotspots.improving?.[0]?.station_name ?? "None"}</strong>
                     </div>
                     <div className="hotspot-row">
-                      <span>⚖ Stable</span>
+                      <span>Stable</span>
                       <strong>{hotspots.stable?.[0]?.station_name ?? "None"}</strong>
                     </div>
                   </div>
@@ -354,7 +353,7 @@ export default function Enforcement() {
                       {inspection_recommendations.map((insp, i) => (
                         <div key={i} className="inspection-row" style={{ flexDirection: "column", gap: 6 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                            <span className="inspection-type">🔍 {insp.inspection_type}</span>
+                            <span className="inspection-type">{insp.inspection_type}</span>
                             <span className="urgency-badge">{insp.urgency}</span>
                           </div>
                           <p style={{ fontSize: 12, color: "#cbd5e1", margin: 0, lineHeight: 1.4 }}>
@@ -377,28 +376,21 @@ export default function Enforcement() {
                     <p style={{ color: "var(--text-2)", fontSize: 13 }}>No resources allocated.</p>
                   ) : (
                     <div className="resource-grid">
-                      {resource_allocation.map((res, i) => {
-                        const icon = res.resource?.includes("Sprinkler") ? "⛟"
-                          : res.resource?.includes("Van") ? "🚐"
-                          : res.resource?.includes("Gun") ? "🔫"
-                          : "👮";
-                        return (
-                          <div key={i} className="resource-card">
-                            <div className="resource-icon">{icon}</div>
-                            <strong className="resource-name">
-                              {res.quantity}x {res.resource}
-                            </strong>
-                            <span className="resource-target" style={{ fontSize: 11 }}>
-                              Target: {res.target_hotspot || res.target_station}
-                            </span>
-                            {res.reason && (
-                              <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, lineHeight: 1.3 }}>
-                                {res.reason}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {resource_allocation.map((res, i) => (
+                        <div key={i} className="resource-card">
+                          <strong className="resource-name">
+                            {res.quantity}x {res.resource}
+                          </strong>
+                          <span className="resource-target" style={{ fontSize: 11 }}>
+                            Target: {res.target_hotspot || res.target_station}
+                          </span>
+                          {res.reason && (
+                            <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, lineHeight: 1.3 }}>
+                              {res.reason}
+                            </p>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -413,7 +405,7 @@ export default function Enforcement() {
             {/* Comparative Highlights */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
               <div className="card" style={{ padding: 16, background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
-                <span style={{ fontSize: 12, color: "#34d399", fontWeight: 700 }}>🏆 BEST PERFORMING CITY</span>
+                <span style={{ fontSize: 12, color: "#34d399", fontWeight: 700 }}>BEST PERFORMING CITY</span>
                 <h3 style={{ fontSize: 22, fontWeight: 700, color: "#f8fafc", margin: "4px 0" }}>
                   {comparativeData.best_performing_city}
                 </h3>
@@ -423,7 +415,7 @@ export default function Enforcement() {
               </div>
 
               <div className="card" style={{ padding: 16, background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
-                <span style={{ fontSize: 12, color: "#f87171", fontWeight: 700 }}>⚠️ HIGHEST RISK URBAN CENTER</span>
+                <span style={{ fontSize: 12, color: "#f87171", fontWeight: 700 }}>HIGHEST RISK URBAN CENTER</span>
                 <h3 style={{ fontSize: 22, fontWeight: 700, color: "#f8fafc", margin: "4px 0" }}>
                   {comparativeData.highest_risk_city}
                 </h3>
@@ -472,13 +464,13 @@ export default function Enforcement() {
 
             {/* Cross-City Transferable Insights */}
             <div className="card" style={{ padding: 16 }}>
-              <h4 className="card-title">💡 What Worked in Comparable Cities (Transferable Policy Insights)</h4>
+              <h4 className="card-title">What Worked in Comparable Cities (Transferable Policy Insights)</h4>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, marginTop: 12 }}>
                 {comparativeData.cross_city_insights?.map((ins, i) => (
                   <div key={i} style={{ background: "rgba(15, 23, 42, 0.6)", padding: 14, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "#60a5fa" }}>
-                        {ins.source_city} ➔ {ins.target_city}
+                        {ins.source_city} -&gt; {ins.target_city}
                       </span>
                       <span style={{ fontSize: 11, color: "#34d399" }}>Impact: {ins.measured_impact}</span>
                     </div>

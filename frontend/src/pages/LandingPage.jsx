@@ -50,7 +50,7 @@ export default function LandingPage() {
         {/* Hero */}
         <section className="landing-hero">
           <div className="landing-hero-content">
-            <span className="landing-eyebrow">✨ Enterprise Air Quality Analytics</span>
+            <span className="landing-eyebrow">Enterprise Air Quality Analytics</span>
             <h1 className="landing-headline">
               Spatiotemporal Environmental Intelligence at National Scale
             </h1>

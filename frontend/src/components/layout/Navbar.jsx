@@ -19,8 +19,6 @@ export default function Navbar({
 
   return (
     <header className="topbar">
-      <div className="topbar-brand" onClick={() => navigate("/")} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && navigate("/")}>
-        <div className="brand-icon">🌬</div>
         <span className="brand-name">AtmosEdgeAI</span>
         <span className="brand-version">v2.1</span>
       </div>

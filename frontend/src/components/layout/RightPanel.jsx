@@ -219,20 +219,20 @@ function RegionalAdvisoryCard({ stationId }) {
   if (!stationId || (!advisory && !loading)) return null;
 
   const languages = [
-    { code: "auto", label: "🌐 Auto (Native)" },
-    { code: "kn", label: "💛 ಕನ್ನಡ (Kannada)" },
-    { code: "ta", label: "❤️ தமிழ் (Tamil)" },
-    { code: "hi", label: "🧡 हिंदी (Hindi)" },
-    { code: "mr", label: "💙 मराठी (Marathi)" },
-    { code: "bn", label: "💚 বাংলা (Bengali)" },
-    { code: "en", label: "🌐 English" },
+    { code: "auto", label: "Auto (Native)" },
+    { code: "kn", label: "ಕನ್ನಡ (Kannada)" },
+    { code: "ta", label: "தமிழ் (Tamil)" },
+    { code: "hi", label: "हिंदी (Hindi)" },
+    { code: "mr", label: "மராठी (Marathi)" },
+    { code: "bn", label: "বাংলা (Bengali)" },
+    { code: "en", label: "English" },
   ];
 
   return (
     <div className="card" style={{ padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: 0.5, textTransform: "uppercase" }}>
-          🗣️ Citizen Health Advisory
+          Citizen Health Advisory
         </span>
 
         {/* Language Switcher */}
@@ -275,7 +275,7 @@ function RegionalAdvisoryCard({ stationId }) {
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-2)", flexWrap: "wrap", gap: 8 }}>
-            <span>🏫 Catchment Alert: <strong style={{ color: "var(--text-1)" }}>{advisory.sensitive_receptors_summary?.split("located")[0]?.trim()}</strong></span>
+            <span>Catchment Alert: <strong style={{ color: "var(--text-1)" }}>{advisory.sensitive_receptors_summary?.split("located")[0]?.trim()}</strong></span>
             <span className="badge badge-outline" style={{ borderColor: "var(--purple)", color: "var(--purple)", fontSize: 10 }}>
               {advisory.spcb_authority}
             </span>
