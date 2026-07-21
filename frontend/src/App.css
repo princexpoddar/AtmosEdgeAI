@@ -1425,7 +1425,6 @@
 .station-dir-list {
   flex: 1;
   overflow-y: auto;
-  max-height: 660px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -3296,6 +3295,13 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 680px;
+}
+
+@media (max-width: 1024px) {
+  .citizen-sidebar {
+    height: auto;
+  }
 }
 
 .citizen-chat-terminal {

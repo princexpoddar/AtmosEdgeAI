@@ -11,6 +11,9 @@ __pycache__/
 *.pyd
 *.log
 
+# Kiro IDE / Spec files
+.kiro/
+
 # Datasets and Databases (large files)
 backend/geobreathe.db
 backend/geobreathe.db-shm
@@ -33,3 +36,17 @@ frontend/build/
 Thumbs.db
 .env
 
+# LaTeX build artifacts & temporary PDFs
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+PROJECT_SUBMISSION_DOCUMENT_*.pdf
+PROJECT_SUBMISSION_DOCUMENT_*.tex
+docs/archive_proposals/
+docs/page*.png
+docs/v*page*.png
+docs/updated_page*.png

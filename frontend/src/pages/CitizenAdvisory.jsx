@@ -23,6 +23,45 @@ const PROMPT_CHIPS = [
   { text: "Is it safe to open windows at home?", icon: "🏠" },
 ];
 
+function formatMessageText(text) {
+  if (!text) return "";
+  const lines = text.split("\n");
+  return lines.map((line, lineIdx) => {
+    // Process **bold** text in this line
+    const parts = line.split("**");
+    const formattedLine = parts.map((part, partIdx) => {
+      if (partIdx % 2 === 1) {
+        return <strong key={partIdx}>{part}</strong>;
+      }
+      return part;
+    });
+
+    // Check if the line is a list item starting with *, -, or •
+    const listMatch = line.trim().match(/^([*-\u2022])\s+(.*)$/);
+    if (listMatch) {
+      const itemContent = listMatch[2];
+      const itemParts = itemContent.split("**");
+      const formattedContent = itemParts.map((p, idx) => {
+        if (idx % 2 === 1) {
+          return <strong key={idx}>{p}</strong>;
+        }
+        return p;
+      });
+      return (
+        <li key={lineIdx} style={{ marginLeft: 20, marginBottom: 4, listStyleType: "disc" }}>
+          {formattedContent}
+        </li>
+      );
+    }
+
+    return (
+      <div key={lineIdx} style={{ minHeight: "1.2em", marginBottom: 2 }}>
+        {formattedLine}
+      </div>
+    );
+  });
+}
+
 export default function CitizenAdvisory() {
   const { stations, loading: stationsLoading } = useStations();
   const [selectedStationId, setSelectedStationId] = useState("");
@@ -153,7 +192,7 @@ export default function CitizenAdvisory() {
 
             {/* Catchment Health Profile Card */}
             {stationAdvisory && selectedStation && (
-              <div className="card" style={{ padding: 16 }}>
+              <div className="card" style={{ padding: 16, flex: 1, display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                   <div>
                     <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -259,7 +298,9 @@ export default function CitizenAdvisory() {
               {chatLog.map((msg, i) => (
                 <div key={i} className={`chat-bubble-row ${msg.sender}`}>
                   <div className={`chat-bubble ${msg.sender}`}>
-                    <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>
+                    <div style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                      {formatMessageText(msg.text)}
+                    </div>
                   </div>
                   <div className="chat-bubble-meta">
                     {msg.sender === "user"

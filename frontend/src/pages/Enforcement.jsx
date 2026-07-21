@@ -306,6 +306,40 @@ export default function Enforcement() {
                     </div>
                   </div>
                 </div>
+
+                {/* Interactive Command Timeline */}
+                <div className="card" style={{ padding: "16px" }}>
+                  <h4 className="timeline-section-title" style={{ margin: "0 0 12px 0" }}>Interactive Intervention Timeline</h4>
+                  <div className="timeline-bar">
+                    {["Now", "6h", "24h", "48h", "72h"].map((node) => {
+                      const baseAqi = selectedStationProfile?.current_aqi ?? 80;
+                      let val = baseAqi;
+                      if (node === "24h") val = baseAqi * 1.1;
+                      else if (node === "48h") val = baseAqi * 1.15;
+                      else if (node === "72h") val = baseAqi * 1.12;
+                      return (
+                        <div
+                          key={node}
+                          className={`timeline-node${selectedNode === node ? " active" : ""}`}
+                          onClick={() => setSelectedNode(node)}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className="timeline-node-label">{node}</div>
+                          <div className="timeline-node-value">{val.toFixed(0)} AQI</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="timeline-insight" style={{ marginTop: 12 }}>
+                    <strong>Command Insight ({selectedNode}):</strong>{" "}
+                    Intervention Priority:{" "}
+                    <span className="timeline-insight-critical">
+                      {isCritical ? "Critical" : "Moderate"}
+                    </span>
+                    . Target Station: {selectedStationProfile?.station_name || "All Wards"}.
+                  </div>
+                </div>
               </div>
 
               {/* Right Column */}
@@ -367,40 +401,6 @@ export default function Enforcement() {
                       })}
                     </div>
                   )}
-                </div>
-
-                {/* Interactive Command Timeline */}
-                <div className="card" style={{ padding: "16px" }}>
-                  <h4 className="timeline-section-title" style={{ margin: "0 0 12px 0" }}>Interactive Intervention Timeline</h4>
-                  <div className="timeline-bar">
-                    {["Now", "6h", "24h", "48h", "72h"].map((node) => {
-                      const baseAqi = selectedStationProfile?.current_aqi ?? 80;
-                      let val = baseAqi;
-                      if (node === "24h") val = baseAqi * 1.1;
-                      else if (node === "48h") val = baseAqi * 1.15;
-                      else if (node === "72h") val = baseAqi * 1.12;
-                      return (
-                        <div
-                          key={node}
-                          className={`timeline-node${selectedNode === node ? " active" : ""}`}
-                          onClick={() => setSelectedNode(node)}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <div className="timeline-node-label">{node}</div>
-                          <div className="timeline-node-value">{val.toFixed(0)} AQI</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="timeline-insight" style={{ marginTop: 12 }}>
-                    <strong>Command Insight ({selectedNode}):</strong>{" "}
-                    Intervention Priority:{" "}
-                    <span className="timeline-insight-critical">
-                      {isCritical ? "Critical" : "Moderate"}
-                    </span>
-                    . Target Station: {selectedStationProfile?.station_name || "All Wards"}.
-                  </div>
                 </div>
               </div>
             </div>

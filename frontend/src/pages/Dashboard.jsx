@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useStations } from "@/hooks/useStations";
 import { useStationDetail } from "@/hooks/useStationDetail";
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [activeMapLayer, setActiveMapLayer] = useState("aqi");
   const [showAlertPanel, setShowAlertPanel] = useState(false);
   const [countdown, setCountdown] = useState(300);
+  const hasSyncedRef = useRef(false);
 
   const { stations, loading: stationsLoading, error: stationsError, lastUpdated, refresh } = useStations();
   const { history, forecasts, intelligence, alerts, loading: detailLoading } = useStationDetail(selectedStationId);
@@ -28,6 +29,13 @@ export default function Dashboard() {
       setSelectedStationId(stations[0].id);
     }
   }, [stations, selectedStationId]);
+
+  // Automatically sync CPCB live data on launch
+  useEffect(() => {
+    if (hasSyncedRef.current) return;
+    hasSyncedRef.current = true;
+    handleSync();
+  }, [handleSync]);
 
   // Countdown timer — only runs on /dashboard
   useEffect(() => {
