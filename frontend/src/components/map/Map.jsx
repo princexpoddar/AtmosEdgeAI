@@ -89,15 +89,49 @@ function TileTheme({ theme }) {
   const map = useMap();
   useEffect(() => {
     const isDark = theme === "dark";
-    const url = isDark
-      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-    const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+    const cartoKey = import.meta.env.VITE_CARTO_API_KEY;
 
     map.eachLayer((layer) => {
       if (layer instanceof L.TileLayer) map.removeLayer(layer);
     });
-    L.tileLayer(url, { attribution }).addTo(map);
+
+    if (cartoKey) {
+      const url = isDark
+        ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${cartoKey}`
+        : `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=${cartoKey}`;
+      L.tileLayer(url, {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 19,
+      }).addTo(map);
+    } else if (isDark) {
+      // High-performance dark canvas basemap with reference labels (no API key required)
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        {
+          attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
+          maxNativeZoom: 16,
+          maxZoom: 19,
+        }
+      ).addTo(map);
+
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+        {
+          attribution: "",
+          maxNativeZoom: 16,
+          maxZoom: 19,
+        }
+      ).addTo(map);
+    } else {
+      L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }
+      ).addTo(map);
+    }
   }, [theme, map]);
   return null;
 }
