@@ -21,7 +21,8 @@ backend/geobreathe.db-wal
 backend/models/dataset_splits.pkl
 backend/models/baseline_rf.pkl
 backend/models/baseline_xgb.pkl
-backend/data/
+backend/data/*
+!backend/data/selected_stations.json
 
 # Frontend dependencies and builds
 frontend/node_modules/
