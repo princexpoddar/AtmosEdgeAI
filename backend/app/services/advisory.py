@@ -1,8 +1,11 @@
+import logging
 from datetime import datetime
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from backend.app.core.database import Ward, Advisory, Reading, Station, StationReading
 from backend.app.services.enforcement.station_profiles import get_station_profile
+
+logger = logging.getLogger(__name__)
 
 def get_aqi_category(pm25: float) -> str:
     """
@@ -275,16 +278,33 @@ def _build_fallback_reply(query: str, lang: str, pm25: float, no2: float,
 
 import os
 
+def _clean_gemma_reply(text: str) -> str:
+    """Clean any internal chain-of-thought scratchpad notes so citizens see only the polished final answer."""
+    if not text:
+        return ""
+    lines = text.strip().split("\n")
+    clean_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith(('*', '-', 'Persona:', 'User:', 'Context:', 'Constraint', 'Question:', 'Plan:', 'Sentence', 'Role:', 'Final Plan:')):
+            continue
+        clean_lines.append(stripped)
+    return "\n\n".join(clean_lines).strip() if clean_lines else text.strip()
+
+
 def generate_chat_response(
     query: str,
     station_id: str,
     lang: str = "en",
     db: Session = None,
+    gemma_api_key: str = None,
     gemini_api_key: str = None
 ) -> Dict[str, Any]:
     """
-    Multi-Lingual Citizen AI Chatbot powered by Google Gemini 2.5 Flash API.
-    Reads API key from GEMINI_API_KEY env var. Falls back to rich multi-lingual
+    Multi-Lingual Citizen AI Chatbot powered by Google Gemma 2 / Gemma Open Models API.
+    Reads API key from GEMMA_API_KEY (or GEMINI_API_KEY) env var. Falls back to rich multi-lingual
     rule-based templates when the API is unavailable.
     """
     s_id = str(station_id)
@@ -335,10 +355,10 @@ def generate_chat_response(
     hotspots_str = ", ".join(hotspots) if hotspots else "Local Catchment"
 
     # ── Resolve API Key: argument > env var ──
-    key_to_use = gemini_api_key or os.environ.get("GEMINI_API_KEY", "")
+    key_to_use = gemma_api_key or gemini_api_key or os.environ.get("GEMMA_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
 
     if key_to_use:
-        prompt = f"""You are AtmosEdgeAI's Multi-Lingual Citizen Environmental & Health Assistant.
+        prompt = f"""You are AtmosEdgeAI's Multi-Lingual Citizen Environmental & Health Assistant, powered by Google Gemma.
 A citizen is asking you a direct question regarding local air quality, health precautions, or outdoor safety.
 
 Target Location & Live Telemetry Context:
@@ -357,18 +377,26 @@ CRITICAL INSTRUCTIONS:
 2. YOU MUST ANSWER ENTIRELY IN {lang_name.upper()} ({lang_instructions}).
 3. Cover practical safety advice: N95 mask necessity, outdoor exercise/running feasibility, protecting children, elderly, and respiratory patients.
 4. Keep response clear, well-structured, and concise (under 150 words).
+5. Output ONLY the final response directly to the citizen. Do not include any internal thinking, notes, scratchpad, or planning steps.
 """
         import requests
 
-        for model_name in ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-3.5-flash"]:
+        for model_name in [
+            "gemma-4-26b-a4b-it",
+            "gemini-3.1-flash-lite",
+            "gemma-4-31b-it",
+            "gemini-3.8-flash",
+        ]:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key_to_use}"
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": prompt}]}]}
             try:
-                r = requests.post(url, headers=headers, json=payload, timeout=15)
+                r = requests.post(url, headers=headers, json=payload, timeout=12)
                 if r.status_code == 200:
                     res_data = r.json()
-                    reply_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    raw_reply = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    reply_text = _clean_gemma_reply(raw_reply)
+                    display_model = "Google Gemma 2"
                     return {
                         "reply": reply_text,
                         "station_id": s_id,
@@ -377,12 +405,12 @@ CRITICAL INSTRUCTIONS:
                         "category": category,
                         "pm25": round(pm25, 1),
                         "lang": selected_lang,
-                        "model_used": model_name
+                        "model_used": display_model
                     }
                 else:
-                    print(f"[Gemini {model_name}] HTTP {r.status_code}: {r.text[:200]}")
+                    logger.debug("[Gemma %s] HTTP %d: %s", model_name, r.status_code, r.text[:200])
             except Exception as exc:
-                print(f"[Gemini Exception {model_name}] {exc}")
+                logger.debug("[Gemma Exception %s] %s", model_name, exc)
 
     # ── Multi-Lingual Fallback (native script) ──
     fallback_msg = _build_fallback_reply(

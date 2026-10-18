@@ -128,7 +128,7 @@ export default function CitizenAdvisory() {
       const aiMsg = {
         sender: "ai",
         text: res.reply,
-        model: res.model_used || "Gemini 2.5 Flash",
+        model: res.model_used || "Google Gemma 2",
         lang: selectedLang,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
@@ -138,7 +138,7 @@ export default function CitizenAdvisory() {
         ...prev,
         {
           sender: "ai",
-          text: "Unable to reach Gemini AI engine. Please verify server connectivity.",
+          text: "Unable to reach Gemma AI engine. Please verify server connectivity.",
           model: "Error",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
@@ -162,7 +162,7 @@ export default function CitizenAdvisory() {
             Citizen Health Risk Advisory System
           </h2>
           <p style={{ fontSize: 13, color: "var(--text-2)", margin: "3px 0 0 0" }}>
-            Real-Time Multi-Lingual Citizen Environmental Health Advisor — Powered by Google Gemini 2.5 Flash
+            Real-Time Multi-Lingual Citizen Environmental Health Advisor — Powered by Google Gemma 2
           </p>
         </div>
 
@@ -241,7 +241,7 @@ export default function CitizenAdvisory() {
             <div className="card" style={{ padding: 16 }}>
               <h4 className="card-title" style={{ marginBottom: 4 }}>AI Response Language</h4>
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 10px 0" }}>
-                Gemini AI will reply in the selected native script
+                Gemma AI will reply in the selected native script
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
                 {LANGUAGES.map((l) => {
@@ -278,7 +278,7 @@ export default function CitizenAdvisory() {
                   <Bot size={16} />
                 </div>
                 <div>
-                  <span style={{ fontWeight: 600, color: "var(--text-1)" }}>Gemini 2.5 Flash Health Assistant</span>
+                  <span style={{ fontWeight: 600, color: "var(--text-1)" }}>Google Gemma 2 Health Assistant</span>
                   <div style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 6, marginTop: 1 }}>
                     <span className="live-pulse" />
                     <span>Real-Time CAAQMS Telemetry Linked</span>

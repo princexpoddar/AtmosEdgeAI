@@ -137,7 +137,8 @@
   flex-shrink: 0;
 }
 
-.gemini-field {
+.gemini-field,
+.gemma-field {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -148,14 +149,16 @@
   height: 32px;
 }
 
-.gemini-field label {
+.gemini-field label,
+.gemma-field label {
   font-size: 11px;
   color: var(--text-3);
   white-space: nowrap;
   font-weight: 500;
 }
 
-.gemini-field input {
+.gemini-field input,
+.gemma-field input {
   background: none;
   border: none;
   outline: none;
