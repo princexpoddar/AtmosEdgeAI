@@ -23,7 +23,13 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import Station
-from backend.app.services.forecaster import calculate_pm25_aqi
+from backend.app.services.forecaster import (
+    calculate_pm25_aqi,
+    is_contiguous_history,
+    build_grounded_fallback_forecast,
+    blend_forecast_with_physics,
+    prepare_continuous_station_dataframe,
+)
 from backend.app.services.forecasting.feature_engineering import engineer_features
 from backend.app.services.forecasting.inference import predict_forecast
 from backend.app.services.ingestion.cache import retrieve_station_lag_history
@@ -86,24 +92,8 @@ def _build_reading_dataframe(readings) -> pd.DataFrame:
 
 
 def _fallback_forecast(base_pm25: float, base_no2: float) -> List[Dict[str, Any]]:
-    """Sinusoidal fallback when ML inference is unavailable."""
-    forecasts = []
-    for i, h in enumerate([24, 48, 72]):
-        factor    = 1.0 + 0.12 * np.sin(h * np.pi / 24.0)
-        pred_pm25 = base_pm25 * factor
-        pred_no2  = base_no2  * (factor * 0.9)
-        aqi       = calculate_pm25_aqi(pred_pm25)
-        forecasts.append({
-            "forecast_time":  datetime.utcnow() + timedelta(hours=h),
-            "predicted_pm25": round(pred_pm25, 1),
-            "predicted_no2":  round(pred_no2,  1),
-            "predicted_aqi":  round(aqi, 1),
-            "category":       _aqi_category(aqi),
-            "pm25_lower":     round(pred_pm25 * 0.85, 1),
-            "pm25_upper":     round(pred_pm25 * 1.15, 1),
-            "confidence":     round(0.92 - 0.05 * i, 2),
-        })
-    return forecasts
+    """Diurnal grounded fallback when ML inference or continuous sequence is unavailable."""
+    return build_grounded_fallback_forecast(base_pm25, base_no2)
 
 
 def _build_forecast(
@@ -113,25 +103,37 @@ def _build_forecast(
     city_encoded: int,
     base_pm25: float,
     base_no2: float,
+    stagnation: float = 0.5,
+    wind_speed: float = 8.0,
+    fire_intensity: float = 0.0,
 ) -> List[Dict[str, Any]]:
     """
     Run ML forecast for a single station using already-fetched readings.
-    Falls back to sinusoidal model if inference fails.
+    Uses continuous historical sequence reconstruction and multi-day synoptic progression.
     """
-    if len(readings) < 48:
-        return _fallback_forecast(base_pm25, base_no2)
+    now = datetime.utcnow()
     try:
-        df_engineered = engineer_features(_build_reading_dataframe(readings), drop_na=True)
+        latest = readings[-1] if readings else None
+        df_continuous = (
+            _build_reading_dataframe(readings)
+            if is_contiguous_history(readings)
+            else prepare_continuous_station_dataframe(readings, latest, count=72)
+        )
+        df_engineered = engineer_features(df_continuous, drop_na=True)
         if len(df_engineered) < 24:
             raise ValueError("Not enough rows after feature engineering")
         pred_dict = predict_forecast(df_engineered, station_lat, station_lon, city_encoded)
+        pred_dict = blend_forecast_with_physics(
+            pred_dict, base_pm25, base_no2, start_time=now,
+            stagnation=stagnation, wind_speed=wind_speed, fire_intensity=fire_intensity
+        )
         return [
             {
-                "forecast_time":  datetime.utcnow() + timedelta(hours=h),
+                "forecast_time":  now + timedelta(hours=h),
                 "predicted_pm25": round(pred_dict[h]["pm25"], 1),
                 "predicted_no2":  round(pred_dict[h]["no2"],  1),
-                "predicted_aqi":  round(calculate_pm25_aqi(pred_dict[h]["pm25"]), 1),
-                "category":       _aqi_category(calculate_pm25_aqi(pred_dict[h]["pm25"])),
+                "predicted_aqi":  round(pred_dict[h]["aqi"], 1),
+                "category":       _aqi_category(pred_dict[h]["aqi"]),
                 "pm25_lower":     round(pred_dict[h]["pm25"] * 0.85, 1),
                 "pm25_upper":     round(pred_dict[h]["pm25"] * 1.15, 1),
                 "confidence":     round(0.92 - 0.05 * i, 2),
@@ -140,7 +142,10 @@ def _build_forecast(
         ]
     except Exception as exc:
         logger.warning("Forecast fallback for station (%.4f, %.4f): %s", station_lat, station_lon, exc)
-        return _fallback_forecast(base_pm25, base_no2)
+        return build_grounded_fallback_forecast(
+            base_pm25, base_no2, start_time=now,
+            stagnation=stagnation, wind_speed=wind_speed, fire_intensity=fire_intensity
+        )
 
 
 from backend.app.services.enforcement.station_profiles import get_station_profile
@@ -207,8 +212,14 @@ def run_enforcement_pipeline(db: Session, station_id: Optional[str] = None, city
 
             # ML forecast — inline, no redundant DB round-trip
             city_encoded   = city_idx.get(st.city, 0)
-            forecast_records = _build_forecast(readings, st.latitude, st.longitude,
-                                               city_encoded, base_pm25, base_no2)
+            stagnation     = float(getattr(latest, "stagnation", 0.5) or 0.5) if latest else 0.5
+            wind_speed     = float(getattr(latest, "wind_speed", 8.0) or 8.0) if latest else 8.0
+            fire_intensity = float(getattr(latest, "upwind_fire_intensity", 0.0) or 0.0) if latest else 0.0
+            forecast_records = _build_forecast(
+                readings, st.latitude, st.longitude,
+                city_encoded, base_pm25, base_no2,
+                stagnation=stagnation, wind_speed=wind_speed, fire_intensity=fire_intensity
+            )
 
             # Intelligence pipeline
             intel_ctx = IntelligenceContext(
