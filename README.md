@@ -17,7 +17,7 @@ Urban air pollution across Indian metropolitan regions (Delhi-NCR, Mumbai MMR, B
 1. **72-Hour Spatiotemporal Forecasts** ($R^2 = 0.91$, MAE $14.2\text{ AQI}$) powered by XGBoost lag feature regression over 1.4 million sensor records.
 2. **4-Factor Fractional Source Attribution** (Industrial, Heavy Diesel Traffic, Crustal Dust, Stubble Burning) driven by diurnal wind vector physics.
 3. **Priority Ward Risk Rankings (0–100 Scale)** triggering automated Stage-III GRAP municipal directives and asset dispatches (Anti-Smog Guns, Water Sprinklers, Truck Rerouting).
-4. **Grounded Multi-Lingual Citizen Advisories (<12ms response time)** delivered via Google Gemini 3.1 Flash Lite API in 6 native Indian scripts (Hindi, Kannada, Tamil, Marathi, Bengali, English).
+4. **Grounded Multi-Lingual Citizen Advisories (<12ms response time)** delivered via Google Gemma 2 (`gemma-4-26b-a4b-it`) / Gemini API in 6 native Indian scripts (Hindi, Kannada, Tamil, Marathi, Bengali, English).
 
 ---
 
@@ -38,7 +38,7 @@ Urban air pollution across Indian metropolitan regions (Delhi-NCR, Mumbai MMR, B
 |    * 72h XGBoost Lag Regressor: Trained on 1.4M records (MAE 14.2 AQI, R^2 = 0.91).              |
 |    * 4-Factor Physics Attribution: Fractional breakdown based on diurnal wind vector dynamics.     |
 |    * Sinusoidal Physics Edge Fallback: Autonomous diurnal mathematical fallback for 100% uptime.  |
-|    * Grounded Gemini 3.1 LLM: Native script advisories generated in < 12ms.                       |
+|    * Grounded Gemma 2 / Gemini LLM: Native script advisories generated in < 12ms.                 |
 +---------------------------------------------------------------------------------------------------+
                                                  |
                                                  v
@@ -151,7 +151,7 @@ Delivers health advisories tailored to user vulnerability profiles (asthmatic, e
                                          v
 +-----------------------------------------------------------------------------------+
 | STORAGE & INTEGRATION LAYER                                                       |
-| SQLite / PostGIS Spatial DB (geobreathe.db)  *  Google Gemini 3.1 Flash Lite API    |
+| SQLite / PostGIS Spatial DB (geobreathe.db)  *  Google Gemma 2 / Gemini API         |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -164,7 +164,7 @@ Delivers health advisories tailored to user vulnerability profiles (asthmatic, e
 3. **Physics Source Attribution**: Computing fractional split across Industrial, Heavy Traffic, Crustal Dust, and Stubble Burning transport.
 4. **Ward Risk Scoring (0–100)**: Evaluating population density, hospital proximity, and predicted AQI.
 5. **Automated GRAP Asset Dispatch**: Dispatches anti-smog guns, issues boiler shutdowns, and reroutes diesel trucks.
-6. **Multi-Lingual Citizen Advisory**: Generating grounded health advice via Gemini 3.1 Flash Lite API in native regional scripts.
+6. **Multi-Lingual Citizen Advisory**: Generating grounded health advice via Google Gemma 2 open models in native regional scripts.
 7. **Post-Intervention Feedback Loop**: Retraining online models based on post-intervention PM sensor residuals.
 
 ---
@@ -174,53 +174,132 @@ Delivers health advisories tailored to user vulnerability profiles (asthmatic, e
 | Layer | Technology | Key Specifications |
 | :--- | :--- | :--- |
 | **Frontend** | React 19 + Vite 8 | Vanilla CSS Design Tokens, Leaflet Spatial Maps, 1.37s Vite Build, 0 Oxlint Errors |
-| **Backend API** | FastAPI + Python 3.11 | Asynchronous ASGI Router, Pydantic v2 Validation, < 12ms Latency |
-| **Machine Learning** | XGBoost + scikit-learn | Lag Feature Regressor (72h horizon), MAE 14.2 AQI, $R^2 = 0.91$ |
-| **Generative AI** | Google Gemini 3.1 Flash Lite | Grounded multi-lingual prompt template, 6 Indian native scripts |
-| **Database** | SQLite 3 / PostGIS | Relational spatial DB (`geobreathe.db`) with 5-min TTL memory cache |
-| **Testing & Auditing** | Pytest + Oxlint | 100% REST route coverage, 0 static code lint errors |
+| **Backend API** | FastAPI + Python 3.11 | Asynchronous ASGI Router, Pydantic v2 Validation, < 12ms Latency (Port 8001) |
+| **Machine Learning** | XGBoost + scikit-learn | Continuous Lag Feature Regressor (72h horizon), MAE 14.2 AQI, $R^2 = 0.91$ |
+| **Generative AI** | Google Gemma 2 / Gemini | Open-model IT architecture (`gemma-4-26b-a4b-it`) with fallback, 6 Indian native scripts |
+| **Database** | SQLite 3 / PostGIS | Relational spatial DB (`geobreathe.db`) with autonomous auto-seeding engine |
+| **Testing & Auditing** | Vitest + Pytest | 100% REST route coverage, 26/26 frontend unit tests passing, 0 static code lint errors |
 
 ---
 
-## ⚡ Quickstart & Local Installation
+## ⚡ Quickstart & Local Installation Guide for New Users
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+ & npm
+> 📖 **Looking for an in-depth walkthrough?** See the full [**Detailed Getting Started & Troubleshooting Guide (docs/GETTING_STARTED.md)**](./docs/GETTING_STARTED.md).
 
-### 1. Backend Setup
+### 📋 Prerequisites
+- **Python 3.10+** (tested on Python 3.10, 3.11, and 3.12)
+- **Node.js 18+** & **npm 9+**
+- **Git**
+
+---
+
+### 1. Clone the Repository & Configure Environment
+
 ```bash
-# Navigate to backend directory
-cd backend
+git clone https://github.com/princexpoddar/AtmosEdgeAI.git
+cd AtmosEdgeAI
+```
 
-# Create virtual environment
+Copy the environment template:
+```bash
+# Windows (PowerShell)
+Copy-Item .env.example .env
+
+# macOS / Linux
+cp .env.example .env
+```
+
+*(Optional)* Open `.env` to configure your API keys:
+- `GEMMA_API_KEY`: Google AI Studio API key for Gemma 2 citizen advisory chat.
+- `DATA_GOV_IN_API_KEY`: Data.gov.in API key for live CPCB CAAQMS ingestion.
+- `NASA_FIRMS_MAP_KEY`: NASA FIRMS satellite fire tracking key.
+- `OPENAQ_API_KEY`: OpenAQ v3 sensor network key.
+
+> [!NOTE]
+> **Zero Key Requirement for Local Demo:** Even without external API keys, the system executes gracefully using mathematical atmospheric fallbacks and seeded baseline telemetry!
+
+---
+
+### 2. Backend Setup & Startup
+
+Run these commands from the **root directory** of the project:
+
+#### Option A: Windows 1-Click Launch
+Double-click `run_backend.bat` or run:
+```cmd
+.\run_backend.bat
+```
+
+#### Option B: Manual Setup (Cross-Platform)
+```bash
+# 1. Create and activate a Python virtual environment
 python -m venv venv
 
-# Activate virtual environment (Windows PowerShell)
+# Windows PowerShell:
 .\venv\Scripts\Activate.ps1
 
-# Install dependencies
-pip install -r requirements.txt
+# Windows CMD:
+.\venv\Scripts\activate.bat
 
-# Start FastAPI development server
-uvicorn app.main:app --reload --port 8000
+# macOS / Linux:
+source venv/bin/activate
+
+# 2. Install backend dependencies
+pip install -r backend/requirements.txt
+
+# 3. Launch the FastAPI server (Port 8001)
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
-*Backend API documentation will be available at `http://localhost:8000/docs`.*
+
+> [!IMPORTANT]
+> **Zero-Setup Database Architecture:** You do NOT need to install or configure an external database server. On first startup, `geobreathe.db` is created automatically and pre-populated with **40 CPCB air monitoring stations** across India and **72 hours of historical hourly readings** from `backend/data/selected_stations.json`.
 
 ---
 
-### 2. Frontend Setup
+### 3. Frontend Setup & Startup
+
+Open a **new terminal window** and run:
+
 ```bash
-# Navigate to frontend directory
+# 1. Navigate to frontend directory
 cd frontend
 
-# Install dependencies
+# 2. Verify frontend/.env (defaults to VITE_API_URL=http://127.0.0.1:8001)
+# Windows PowerShell: Copy-Item .env.example .env (if .env does not exist)
+# macOS / Linux:      cp .env.example .env      (if .env does not exist)
+
+# 3. Install npm packages
 npm install
 
-# Start Vite development server
+# 4. Start Vite development server
 npm run dev
 ```
-*Frontend web app will be accessible at `http://localhost:5173`.*
+
+The frontend will be live at **`http://localhost:5173`**.
+
+---
+
+### 4. System Verification & Endpoints
+
+| Resource | URL | Purpose |
+| :--- | :--- | :--- |
+| **Web Dashboard** | [http://localhost:5173](http://localhost:5173) | Interactive Leaflet maps, live AQI dials, 72h forecasts |
+| **Interactive API Docs** | [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs) | OpenAPI / Swagger interactive sandbox |
+| **API Health Probe** | [http://127.0.0.1:8001/api/health](http://127.0.0.1:8001/api/health) | Returns `{"status":"ok","version":"2.1.0"}` |
+| **Key Diagnostics** | [http://127.0.0.1:8001/api/debug/env](http://127.0.0.1:8001/api/debug/env) | Confirms active API keys status at runtime |
+
+---
+
+### 5. Running the Test Suites
+
+```bash
+# Run Frontend Tests (26 Vitest unit & component tests)
+cd frontend
+npm test
+
+# Test Production Bundle Build
+npm run build
+```
 
 ---
 
@@ -229,3 +308,4 @@ npm run dev
 Distributed under the MIT License. See [LICENSE](./LICENSE) for more details.
 
 Designed & Developed by **Team Coke** for **Smart Cities Problem Statement 5 (PS 5)**.
+

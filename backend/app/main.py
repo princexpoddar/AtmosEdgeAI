@@ -177,4 +177,5 @@ def debug_env():
         "DATA_GOV_IN_API_KEY": "SET" if os.getenv("DATA_GOV_IN_API_KEY") else "MISSING",
         "OPENAQ_API_KEY":      "SET" if os.getenv("OPENAQ_API_KEY")      else "MISSING",
         "NASA_FIRMS_MAP_KEY":  "SET" if os.getenv("NASA_FIRMS_MAP_KEY")  else "MISSING",
+        "GEMMA_API_KEY":       "SET" if (os.getenv("GEMMA_API_KEY") or os.getenv("GEMINI_API_KEY")) else "MISSING",
     }
